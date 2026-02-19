@@ -26,7 +26,8 @@ var (
 	autoName     = flag.Bool("auto", false, "自动使用 remarks 作为文件名")
 	socksPort    = flag.Int("port", 1234, "Hysteria2 SOCKS 端口")
 	prettyPrint  = flag.Bool("pretty", true, "美化 JSON 输出")
-	insecure     = flag.Bool("insecure", false, "跳过 TLS 证书验证 (用于 Android 等环境)")
+	insecure     = flag.Bool("insecure", false, "跳过 TLS 证书验证")
+	useDNS       = flag.Bool("dns", false, "使用公共 DNS (解决 Android DNS 解析问题)")
 	showHelp     = flag.Bool("h", false, "显示帮助")
 )
 
@@ -76,7 +77,6 @@ func usage() {
 输出格式:
   json   - ProfileItem JSON (默认)
   xray   - Xray 出站配置
-  hy2    - Hysteria2 原生配置
   uri    - 生成链接
 
 示例:
@@ -94,6 +94,9 @@ func usage() {
 
   # Android 设备跳过证书验证
   proxylink -sub "https://..." -insecure -format xray -dir ./nodes
+
+  # Android 设备 DNS 解析失败，使用公共 DNS
+  proxylink -sub "https://..." -dns -format xray -dir ./nodes
 
   # 从文件批量解析，每个节点单独输出
   proxylink -file nodes.txt -format hy2 -dir ./configs`)
@@ -134,12 +137,8 @@ func handleStdin() error {
 }
 
 func handleSubscription(url string) error {
-	var converter *subscription.Converter
-	if *insecure {
-		converter = subscription.NewConverterInsecure()
-	} else {
-		converter = subscription.NewConverter()
-	}
+	// 使用完整配置创建转换器
+	converter := subscription.NewConverterFull(*insecure, *useDNS)
 
 	result, err := converter.Convert(url)
 	if err != nil {
@@ -291,9 +290,6 @@ func formatSingleProfile(profile *model.ProfileItem) (string, error) {
 	case "xray":
 		config := generator.GenerateXrayConfig(profile)
 		return toJSON(config)
-	case "hy2":
-		config := generator.GenerateHysteria2Config(profile, *socksPort)
-		return toJSON(config)
 	case "uri":
 		return encoder.ToURI(profile), nil
 	default:
@@ -310,12 +306,6 @@ func formatProfiles(profiles []*model.ProfileItem) (string, error) {
 		}
 		config := &generator.XrayConfig{Outbounds: outbounds}
 		return toJSON(config)
-	case "hy2":
-		var configs []*generator.Hysteria2Config
-		for _, p := range profiles {
-			configs = append(configs, generator.GenerateHysteria2Config(p, *socksPort))
-		}
-		return toJSON(configs)
 	case "uri":
 		uris := encoder.ToURIBatch(profiles)
 		return strings.Join(uris, "\n"), nil

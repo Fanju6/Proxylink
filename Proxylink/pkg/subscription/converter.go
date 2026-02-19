@@ -33,9 +33,28 @@ func NewConverterInsecure() *Converter {
 	}
 }
 
+// NewConverterWithDNS 创建使用公共 DNS 的转换器 (适用于 Android)
+func NewConverterWithDNS() *Converter {
+	return &Converter{
+		fetcher: NewFetcherWithDNS(),
+	}
+}
+
+// NewConverterFull 创建完整配置的转换器
+func NewConverterFull(insecure, useDNS bool) *Converter {
+	return &Converter{
+		fetcher: NewFetcherFull(insecure, useDNS),
+	}
+}
+
 // SetInsecure 设置是否跳过证书验证
 func (c *Converter) SetInsecure(insecure bool) {
 	c.fetcher.SetInsecure(insecure)
+}
+
+// SetUseDNS 设置是否使用公共 DNS
+func (c *Converter) SetUseDNS(useDNS bool) {
+	c.fetcher.SetUseDNS(useDNS)
 }
 
 // Convert 从 URL 获取并转换订阅

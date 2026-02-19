@@ -30,10 +30,13 @@ type OutSettings struct {
 	Servers []ServersBean `json:"servers,omitempty"`
 	// WireGuard
 	SecretKey string          `json:"secretKey,omitempty"`
-	Address   []string        `json:"address,omitempty"`
+	Address   interface{}     `json:"address,omitempty"` // []string for WireGuard, string for Hysteria
 	Peers     []WireGuardPeer `json:"peers,omitempty"`
 	Reserved  []int           `json:"reserved,omitempty"`
 	Mtu       int             `json:"mtu,omitempty"`
+	// Hysteria
+	Port    int `json:"port,omitempty"`
+	Version int `json:"version,omitempty"` // Hysteria version (2 for Hysteria2)
 }
 
 type VnextBean struct {
@@ -86,6 +89,8 @@ type StreamSettings struct {
 	TlsSettings         *TlsSettingsBean         `json:"tlsSettings,omitempty"`
 	RealitySettings     *TlsSettingsBean         `json:"realitySettings,omitempty"`
 	GrpcSettings        *GrpcSettingsBean        `json:"grpcSettings,omitempty"`
+	HysteriaSettings    *HysteriaSettingsBean    `json:"hysteriaSettings,omitempty"`
+	Finalmask           *FinalMaskBean           `json:"finalmask,omitempty"`
 }
 
 type TcpSettingsBean struct {
@@ -150,15 +155,18 @@ type HttpSettingsBean struct {
 }
 
 type TlsSettingsBean struct {
-	AllowInsecure bool     `json:"allowInsecure"`
-	Fingerprint   string   `json:"fingerprint,omitempty"`
-	PublicKey     string   `json:"publicKey,omitempty"`
-	ServerName    string   `json:"serverName,omitempty"`
-	ShortId       string   `json:"shortId,omitempty"`
-	Show          bool     `json:"show"`
-	SpiderX       string   `json:"spiderX,omitempty"`
-	Alpn          []string `json:"alpn,omitempty"`
-	Mldsa65Verify string   `json:"mldsa65Verify,omitempty"`
+	AllowInsecure        bool     `json:"allowInsecure"`
+	Fingerprint          string   `json:"fingerprint,omitempty"`
+	PublicKey            string   `json:"publicKey,omitempty"`
+	ServerName           string   `json:"serverName,omitempty"`
+	ShortId              string   `json:"shortId,omitempty"`
+	Show                 bool     `json:"show"`
+	SpiderX              string   `json:"spiderX,omitempty"`
+	Alpn                 []string `json:"alpn,omitempty"`
+	Mldsa65Verify        string   `json:"mldsa65Verify,omitempty"`
+	EchConfigList        string   `json:"echConfigList,omitempty"`
+	EchForceQuery        string   `json:"echForceQuery,omitempty"`
+	PinnedPeerCertSha256 string   `json:"pinnedPeerCertSha256,omitempty"`
 }
 
 type GrpcSettingsBean struct {
@@ -172,6 +180,36 @@ type GrpcSettingsBean struct {
 type MuxBean struct {
 	Enabled     bool `json:"enabled"`
 	Concurrency int  `json:"concurrency,omitempty"`
+}
+
+// Hysteria 配置 (Xray Hysteria2)
+type HysteriaSettingsBean struct {
+	Version int             `json:"version"`
+	Auth    string          `json:"auth,omitempty"`
+	Up      string          `json:"up,omitempty"`
+	Down    string          `json:"down,omitempty"`
+	Udphop  *HysteriaUdphop `json:"udphop,omitempty"`
+}
+
+type HysteriaUdphop struct {
+	Port     string `json:"port,omitempty"`
+	Interval int    `json:"interval,omitempty"`
+}
+
+// FinalMaskBean Hysteria 混淆配置 (替代旧的 udpmasks)
+type FinalMaskBean struct {
+	Tcp []MaskBean `json:"tcp,omitempty"`
+	Udp []MaskBean `json:"udp,omitempty"`
+}
+
+type MaskBean struct {
+	Type     string            `json:"type"`
+	Settings *MaskSettingsBean `json:"settings,omitempty"`
+}
+
+type MaskSettingsBean struct {
+	Password string `json:"password,omitempty"`
+	Domain   string `json:"domain,omitempty"`
 }
 
 // GenerateXrayOutbound 生成 Xray 出站配置
@@ -192,7 +230,7 @@ func GenerateXrayOutbound(profile *model.ProfileItem) *XrayOutbound {
 	case model.WIREGUARD:
 		return generateWireGuardOutbound(profile)
 	case model.HYSTERIA2:
-		return generateSocksOutbound("127.0.0.1", "1234", "", "")
+		return generateHysteria2Outbound(profile)
 	default:
 		return nil
 	}
@@ -400,6 +438,76 @@ func generateWireGuardOutbound(p *model.ProfileItem) *XrayOutbound {
 	}
 }
 
+func generateHysteria2Outbound(p *model.ProfileItem) *XrayOutbound {
+	port, _ := strconv.Atoi(p.ServerPort)
+
+	// 构建 StreamSettings
+	ss := &StreamSettings{
+		Network:  "hysteria",
+		Security: "tls",
+	}
+
+	// hysteriaSettings (version 2 for Hysteria2)
+	ss.HysteriaSettings = &HysteriaSettingsBean{
+		Version: 2,
+		Auth:    p.Password,
+	}
+
+	// 端口跳跃
+	if p.PortHopping != "" {
+		interval := 30
+		if p.PortHoppingInterval != "" {
+			if v, err := strconv.Atoi(p.PortHoppingInterval); err == nil {
+				interval = v
+			}
+		}
+		ss.HysteriaSettings.Udphop = &HysteriaUdphop{
+			Port:     p.PortHopping,
+			Interval: interval,
+		}
+	}
+
+	// TLS 配置
+	sni := p.SNI
+	if sni == "" {
+		sni = p.Server
+	}
+	ss.TlsSettings = &TlsSettingsBean{
+		AllowInsecure: p.Insecure,
+		ServerName:    sni,
+		Alpn:          []string{"h3"},
+	}
+	if p.ALPN != "" {
+		ss.TlsSettings.Alpn = splitAndTrim(p.ALPN, ",")
+	}
+	if p.Fingerprint != "" {
+		ss.TlsSettings.Fingerprint = p.Fingerprint
+	}
+
+	// obfs (salamander) -> finalmask
+	if p.ObfsPassword != "" {
+		ss.Finalmask = &FinalMaskBean{
+			Udp: []MaskBean{{
+				Type: "salamander",
+				Settings: &MaskSettingsBean{
+					Password: p.ObfsPassword,
+				},
+			}},
+		}
+	}
+
+	return &XrayOutbound{
+		Protocol: "hysteria",
+		Settings: &OutSettings{
+			Address: p.Server,
+			Port:    port,
+			Version: 2,
+		},
+		StreamSettings: ss,
+		Tag:            "proxy",
+	}
+}
+
 func buildStreamSettings(p *model.ProfileItem) *StreamSettings {
 	ss := &StreamSettings{
 		Network:  p.Network,
@@ -573,9 +681,12 @@ func populateTlsSettings(ss *StreamSettings, p *model.ProfileItem, sniExt string
 	}
 
 	tlsSetting := &TlsSettingsBean{
-		AllowInsecure: p.Insecure,
-		ServerName:    sni,
-		Fingerprint:   p.Fingerprint,
+		AllowInsecure:        p.Insecure,
+		ServerName:           sni,
+		Fingerprint:          p.Fingerprint,
+		EchConfigList:        p.EchConfigList,
+		EchForceQuery:        p.EchForceQuery,
+		PinnedPeerCertSha256: p.PinnedCA256,
 	}
 
 	if p.ALPN != "" {

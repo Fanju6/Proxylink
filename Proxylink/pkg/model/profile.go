@@ -44,6 +44,11 @@ type ProfileItem struct {
 	ShortID   string `json:"shortId,omitempty"`   // Reality shortId
 	SpiderX   string `json:"spiderX,omitempty"`   // Reality spiderX
 
+	// ECH 配置
+	EchConfigList string `json:"echConfigList,omitempty"` // ECH 配置列表
+	EchForceQuery string `json:"echForceQuery,omitempty"` // ECH 强制查询
+	PinnedCA256   string `json:"pinnedCA256,omitempty"`   // 证书 SHA256 指纹
+
 	// WireGuard 配置
 	SecretKey    string `json:"secretKey,omitempty"`    // 私钥
 	PreSharedKey string `json:"preSharedKey,omitempty"` // 预共享密钥
