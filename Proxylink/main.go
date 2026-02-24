@@ -20,14 +20,13 @@ var (
 	parseURI     = flag.String("parse", "", "解析单条链接")
 	parseFile    = flag.String("file", "", "从文件批量解析")
 	subURL       = flag.String("sub", "", "订阅 URL")
-	outputFormat = flag.String("format", "json", "输出格式: json, xray, hy2, uri")
+	outputFormat = flag.String("format", "json", "输出格式: json, xray, uri")
 	outputFile   = flag.String("o", "", "输出到文件 (单文件模式)")
 	outputDir    = flag.String("dir", "", "输出目录 (多文件模式，每个节点单独一个文件)")
 	autoName     = flag.Bool("auto", false, "自动使用 remarks 作为文件名")
-	socksPort    = flag.Int("port", 1234, "Hysteria2 SOCKS 端口")
 	prettyPrint  = flag.Bool("pretty", true, "美化 JSON 输出")
 	insecure     = flag.Bool("insecure", false, "跳过 TLS 证书验证")
-	useDNS       = flag.Bool("dns", false, "使用公共 DNS (解决 Android DNS 解析问题)")
+	useDNS       = flag.Bool("dns", false, "使用公共 DNS")
 	showHelp     = flag.Bool("h", false, "显示帮助")
 )
 
@@ -92,14 +91,14 @@ func usage() {
   # 订阅转换，每个节点单独输出一个文件到指定目录
   proxylink -sub "https://..." -format xray -dir ./nodes
 
-  # Android 设备跳过证书验证
+  # 跳过证书验证
   proxylink -sub "https://..." -insecure -format xray -dir ./nodes
 
-  # Android 设备 DNS 解析失败，使用公共 DNS
+  # 使用公共 DNS
   proxylink -sub "https://..." -dns -format xray -dir ./nodes
 
   # 从文件批量解析，每个节点单独输出
-  proxylink -file nodes.txt -format hy2 -dir ./configs`)
+  proxylink -file nodes.txt -format xray -dir ./configs`)
 }
 
 func handleParseSingle(uri string) error {

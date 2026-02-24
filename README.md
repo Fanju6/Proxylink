@@ -7,7 +7,7 @@
 - **链接解析**: 支持 8 种协议 (VMess/VLESS/SS/Trojan/Socks/HTTP/WireGuard/Hysteria2)
 - **配置文件**: 支持解析 WireGuard 配置文件 (.conf)
 - **链接生成**: ProfileItem → URI
-- **配置生成**: ProfileItem → Xray JSON / Hysteria2 JSON
+- **配置生成**: ProfileItem → Xray JSON
 - **订阅转换**: 订阅 URL → 批量解析
 - **命令行工具**: 支持管道、文件、订阅等多种输入方式
 
@@ -45,9 +45,6 @@ proxylink -parse "vless://uuid@example.com:443?type=ws#节点"
 # 输出 Xray 配置
 proxylink -parse "vless://uuid@example.com:443?type=ws#节点" -format xray
 
-# 输出 Hysteria2 配置
-proxylink -parse "hysteria2://auth@hk.example.com:443?sni=bing.com#HK" -format hy2
-
 # 直接传入链接作为参数
 proxylink "vless://uuid@example.com:443#节点" -format xray
 ```
@@ -67,9 +64,6 @@ proxylink -file nodes.txt -format uri
 ```bash
 # 获取订阅并转换为 Xray 配置
 proxylink -sub "https://example.com/sub" -format xray -o config.json
-
-# 订阅转 Hysteria2 配置
-proxylink -sub "https://example.com/sub" -format hy2
 ```
 
 ### 管道输入
@@ -88,7 +82,6 @@ cat nodes.txt | proxylink -format xray
 |------|------|
 | `-format json` | ProfileItem JSON (默认) |
 | `-format xray` | Xray 出站配置 |
-| `-format hy2` | Hysteria2 原生配置 |
 | `-format uri` | 生成链接 |
 
 ### 其他参数
@@ -98,9 +91,9 @@ cat nodes.txt | proxylink -format xray
 | `-o <file>` | 输出到单个文件 |
 | `-dir <path>` | 输出目录 (每个节点单独一个文件) |
 | `-auto` | 自动使用 remarks 作为文件名 |
-| `-port <port>` | Hysteria2 SOCKS 端口 (默认 1234) |
 | `-pretty` | 美化 JSON 输出 (默认 true) |
 | `-insecure` | 跳过 TLS 证书验证 |
+| `-dns` | 使用公共 DNS |
 
 ### 多文件输出模式
 
@@ -117,7 +110,7 @@ proxylink -sub "https://example.com/sub" -format xray -dir ./nodes
 #   ./nodes/美国节点.json
 
 # 从文件批量解析，每个节点单独输出
-proxylink -file nodes.txt -format hy2 -dir ./configs
+proxylink -file nodes.txt -format xray -dir ./configs
 ```
 
 ---
@@ -164,14 +157,6 @@ jsonBytes, _ := json.MarshalIndent(outbound, "", "  ")
 fmt.Println(string(jsonBytes))
 ```
 
-### 生成 Hysteria2 配置
-
-```go
-// socksPort 是 Hysteria2 监听的本地端口
-config := generator.GenerateHysteria2Config(profile, 1234)
-jsonBytes, _ := json.MarshalIndent(config, "", "  ")
-fmt.Println(string(jsonBytes))
-```
 
 ### 生成链接
 
@@ -230,8 +215,7 @@ xray2json/
 │   │   └── encoder.go
 │   │
 │   ├── generator/             # 配置生成
-│   │   ├── xray.go            # Xray 出站配置
-│   │   └── hysteria2.go       # Hysteria2 原生配置
+│   │   └── xray.go            # Xray 出站配置
 │   │
 │   ├── subscription/          # 订阅处理
 │   │   ├── fetcher.go         # HTTP 获取
