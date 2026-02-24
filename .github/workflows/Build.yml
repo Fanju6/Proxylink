@@ -1,0 +1,166 @@
+name: Build Proxylink
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Proxylink/**'
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - 'Proxylink/**'
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        goos: [windows, freebsd, openbsd, linux, darwin]
+        goarch: [amd64, 386]
+        exclude:
+          - goarch: 386
+            goos: darwin
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+          - goos: linux
+            goarch: arm
+            goarm: 6
+          - goos: linux
+            goarch: arm
+            goarm: 5
+          - goos: android
+            goarch: arm64
+          - goos: android
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: riscv64
+          - goos: linux
+            goarch: loong64
+          - goos: linux
+            goarch: mips64
+          - goos: linux
+            goarch: mips64le
+          - goos: linux
+            goarch: mipsle
+          - goos: linux
+            goarch: mips
+          - goos: linux
+            goarch: ppc64
+          - goos: linux
+            goarch: ppc64le
+          - goos: freebsd
+            goarch: arm64
+          - goos: freebsd
+            goarch: arm
+            goarm: 7
+          - goos: linux
+            goarch: s390x
+          - goos: openbsd
+            goarch: arm64
+          - goos: openbsd
+            goarch: arm
+            goarm: 7
+      fail-fast: false
+
+    runs-on: ubuntu-latest
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      GOARM: ${{ matrix.goarm }}
+      CGO_ENABLED: 0
+    
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: Proxylink/go.mod
+          check-latest: true
+          cache: false
+
+      - name: Install UPX
+        run: sudo apt-get update && sudo apt-get install -y upx-ucl
+
+      - name: Get project dependencies
+        run: |
+          cd Proxylink
+          go mod download
+
+      - name: Set up NDK
+        if: matrix.goos == 'android'
+        run: |
+          wget -qO android-ndk.zip https://dl.google.com/android/repository/android-ndk-r28b-linux.zip
+          unzip android-ndk.zip
+          rm android-ndk.zip
+          declare -A arches=(
+            ["amd64"]="x86_64-linux-android24-clang"
+            ["arm64"]="aarch64-linux-android24-clang"
+          )
+          echo CC="$(realpath android-ndk-*/toolchains/llvm/prebuilt/linux-x86_64/bin)/${arches[${{ matrix.goarch }}]}" >> $GITHUB_ENV
+          echo CGO_ENABLED=1 >> $GITHUB_ENV
+
+      - name: Build Proxylink
+        run: |
+          cd Proxylink
+          mkdir -p ../build_assets
+          BINARY_NAME=proxylink
+          if [[ ${{ matrix.goos }} == 'windows' ]]; then
+            BINARY_NAME=proxylink.exe
+          fi
+          
+          # Special handling for MIPS architectures to avoid write barrier errors
+          GCFLAGS="all=-l=4"
+          if [[ ${{ matrix.goarch }} == 'mips' || ${{ matrix.goarch }} == 'mipsle' ]]; then
+            GCFLAGS="-l=4"
+          fi
+          
+          go build -o ../build_assets/${BINARY_NAME} -trimpath -buildvcs=false -gcflags="$GCFLAGS" -ldflags="-s -w -buildid=" -v .
+          
+          # Soft-float build for MIPS as per Xray reference
+          if [[ ${{ matrix.goarch }} == 'mips' || ${{ matrix.goarch }} == 'mipsle' ]]; then
+            GOMIPS=softfloat go build -o ../build_assets/${BINARY_NAME}_softfloat -trimpath -buildvcs=false -gcflags="$GCFLAGS" -ldflags="-s -w -buildid=" -v .
+          fi
+
+      - name: Compress with UPX
+        run: |
+          # Compress and ignore errors if architecture not supported
+          upx --ultra-brute --lzma  build_assets/* || true
+
+      - name: Prepare package
+        run: |
+          cp README.md build_assets/
+          cd build_assets
+          
+          # Naming like proxylink-windows-amd64
+          PACKAGE_NAME=proxylink-${{ matrix.goos }}-${{ matrix.goarch }}
+          [ -z "${{ matrix.goarm }}" ] || PACKAGE_NAME="${PACKAGE_NAME}-v${{ matrix.goarm }}"
+          
+          zip -9r ../${PACKAGE_NAME}.zip .
+          echo "PACKAGE_FULL_NAME=${PACKAGE_NAME}.zip" >> $GITHUB_ENV
+
+      - name: Upload binaries to release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxylink-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm && format('-v{0}', matrix.goarm) }}
+          path: build_assets/*
