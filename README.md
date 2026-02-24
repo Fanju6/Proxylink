@@ -5,11 +5,12 @@
 ## 功能特性
 
 - **链接解析**: 支持 8 种协议 (VMess/VLESS/SS/Trojan/Socks/HTTP/WireGuard/Hysteria2)
+- **逆向转换**: 支持将 Xray JSON 配置还原为节点链接 (`-xray`)
 - **配置文件**: 支持解析 WireGuard 配置文件 (.conf)
 - **链接生成**: ProfileItem → URI
 - **配置生成**: ProfileItem → Xray JSON
 - **订阅转换**: 订阅 URL → 批量解析
-- **命令行工具**: 支持管道、文件、订阅等多种输入方式
+- **命令行工具**: 支持管道、文件、订阅、Xray 配置等多种输入方式
 
 ---
 
@@ -57,6 +58,9 @@ proxylink -file nodes.txt -format xray -o outbounds.json
 
 # 输出链接列表
 proxylink -file nodes.txt -format uri
+
+# 逆向转换：从 Xray JSON 还原为 URI 链接
+proxylink -xray config.json -format uri
 ```
 
 ### 订阅转换
@@ -88,6 +92,10 @@ cat nodes.txt | proxylink -format xray
 
 | 参数 | 说明 |
 |------|------|
+| `-parse <uri>` | 解析单条链接 |
+| `-file <file>` | 从文件批量解析链接 (每行一条) |
+| `-xray <file>` | 从 Xray JSON 配置文件解析节点 (逆向转换) |
+| `-sub <url>` | 从订阅 URL 获取并解析 |
 | `-o <file>` | 输出到单个文件 |
 | `-dir <path>` | 输出目录 (每个节点单独一个文件) |
 | `-auto` | 自动使用 remarks 作为文件名 |
@@ -209,7 +217,8 @@ xray2json/
 │   │   ├── socks.go           # Socks
 │   │   ├── http.go            # HTTP
 │   │   ├── wireguard.go       # WireGuard
-│   │   └── hysteria2.go       # Hysteria2
+│   │   ├── hysteria2.go       # Hysteria2
+│   │   └── xray.go            # Xray JSON (逆向解析)
 │   │
 │   ├── encoder/               # 链接生成
 │   │   └── encoder.go

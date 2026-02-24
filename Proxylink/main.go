@@ -19,6 +19,7 @@ import (
 var (
 	parseURI     = flag.String("parse", "", "解析单条链接")
 	parseFile    = flag.String("file", "", "从文件批量解析")
+	parseXray    = flag.String("xray", "", "从 Xray JSON 配置文件解析")
 	subURL       = flag.String("sub", "", "订阅 URL")
 	outputFormat = flag.String("format", "json", "输出格式: json, xray, uri")
 	outputFile   = flag.String("o", "", "输出到文件 (单文件模式)")
@@ -46,6 +47,8 @@ func main() {
 		err = handleParseSingle(*parseURI)
 	case *parseFile != "":
 		err = handleParseFile(*parseFile)
+	case *parseXray != "":
+		err = handleParseXray(*parseXray)
 	case *subURL != "":
 		err = handleSubscription(*subURL)
 	case flag.NArg() > 0:
@@ -67,6 +70,7 @@ func usage() {
   proxylink [选项] [链接]
   proxylink -parse "vless://..."
   proxylink -file nodes.txt
+  proxylink -xray config.json
   proxylink -sub "https://example.com/sub"
   echo "vless://..." | proxylink
 
@@ -133,6 +137,18 @@ func handleStdin() error {
 		return fmt.Errorf("无输入内容")
 	}
 	return handleBatch(input)
+}
+
+func handleParseXray(filename string) error {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	profiles, err := parser.ParseXrayConfig(content)
+	if err != nil {
+		return err
+	}
+	return outputProfiles(profiles)
 }
 
 func handleSubscription(url string) error {
