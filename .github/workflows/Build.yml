@@ -90,8 +90,6 @@ jobs:
           check-latest: true
           cache: false
 
-      - name: Install UPX
-        run: sudo apt-get update && sudo apt-get install -y upx-ucl
 
       - name: Get project dependencies
         run: |
@@ -132,11 +130,6 @@ jobs:
           if [[ ${{ matrix.goarch }} == 'mips' || ${{ matrix.goarch }} == 'mipsle' ]]; then
             GOMIPS=softfloat go build -o ../build_assets/${BINARY_NAME}_softfloat -trimpath -buildvcs=false -gcflags="$GCFLAGS" -ldflags="-s -w -buildid=" -v .
           fi
-
-      - name: Compress with UPX
-        run: |
-          # Compress and ignore errors if architecture not supported
-          upx --ultra-brute --lzma  build_assets/* || true
 
       - name: Prepare package
         run: |
