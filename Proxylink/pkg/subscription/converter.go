@@ -1,4 +1,4 @@
-﻿package subscription
+package subscription
 
 import (
 	"proxylink/pkg/model"
@@ -71,6 +71,19 @@ func (c *Converter) Convert(url string) (*ConvertResult, error) {
 
 // ConvertContent 转换订阅内容
 func (c *Converter) ConvertContent(content string) (*ConvertResult, error) {
+	// 自动检测 Clash YAML 格式
+	if parser.IsClashYAML(content) {
+		profiles, err := parser.ParseClashConfig([]byte(content))
+		if err == nil && len(profiles) > 0 {
+			return &ConvertResult{
+				Profiles: profiles,
+				Total:    len(profiles),
+				Success:  len(profiles),
+			}, nil
+		}
+		// 解析失败则回退到链接解析
+	}
+
 	// 解码
 	lines, err := Decode(content)
 	if err != nil {

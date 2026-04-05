@@ -169,6 +169,15 @@ func handleSubscription(url string) error {
 }
 
 func handleBatch(content string) error {
+	// 自动检测 Clash YAML 格式
+	if parser.IsClashYAML(content) {
+		profiles, err := parser.ParseClashConfig([]byte(content))
+		if err == nil && len(profiles) > 0 {
+			return outputProfiles(profiles)
+		}
+		// 解析失败则回退到链接解析
+	}
+
 	profiles, errs := parser.ParseBatch(content)
 	if len(errs) > 0 {
 		fmt.Fprintf(os.Stderr, "警告: %d 条解析失败\n", len(errs))
