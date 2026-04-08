@@ -24,6 +24,7 @@ var (
 	outputFormat = flag.String("format", "json", "输出格式: json, xray, singbox, uri")
 	outputFile   = flag.String("o", "", "输出到文件 (单文件模式)")
 	outputDir    = flag.String("dir", "", "输出目录 (多文件模式，每个节点单独一个文件)")
+	hwid         = flag.String("hwid", "", "将 Hardware ID 附加到请求")
 	autoName     = flag.Bool("auto", false, "自动使用 remarks 作为文件名")
 	prettyPrint  = flag.Bool("pretty", true, "美化 JSON 输出")
 	insecure     = flag.Bool("insecure", false, "跳过 TLS 证书验证")
@@ -101,6 +102,9 @@ func usage() {
   # 使用公共 DNS
   proxylink -sub "https://..." -dns -format xray -dir ./nodes
 
+  # 将 Hardware ID 附加到请求
+  proxylink -sub "https://..." -hwid YOUR-HWID -format xray -dir ./nodes
+
   # 从文件批量解析，每个节点单独输出
   proxylink -file nodes.txt -format xray -dir ./configs`)
 }
@@ -152,8 +156,14 @@ func handleParseXray(filename string) error {
 }
 
 func handleSubscription(url string) error {
+	// Don't attach the X-HWID header to request when HWID isn't passed
+	var _hwid *string = nil
+	if *hwid != "" {
+		_hwid = &*hwid
+	}
+
 	// 使用完整配置创建转换器
-	converter := subscription.NewConverterFull(*insecure, *useDNS)
+	converter := subscription.NewConverterFull(*insecure, *useDNS, _hwid)
 
 	result, err := converter.Convert(url)
 	if err != nil {

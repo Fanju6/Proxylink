@@ -1,4 +1,4 @@
-﻿package subscription
+package subscription
 
 import (
 	"context"
@@ -23,6 +23,7 @@ type Fetcher struct {
 	userAgent  string
 	skipVerify bool
 	useDNS     bool // 是否使用自定义 DNS
+	hwid       *string
 }
 
 // createCustomDialer 创建使用公共 DNS 的自定义拨号器
@@ -80,6 +81,7 @@ func NewFetcher() *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: false,
 		useDNS:     false,
+		hwid:       nil,
 	}
 }
 
@@ -93,6 +95,7 @@ func NewFetcherInsecure() *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: true,
 		useDNS:     false,
+		hwid:       nil,
 	}
 }
 
@@ -106,11 +109,26 @@ func NewFetcherWithDNS() *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: false,
 		useDNS:     true,
+		hwid:       nil,
+	}
+}
+
+// NewFetcherWithHWID creates a new Fetcher with hardware identifier
+func NewFetcherWithHWID(hwid *string) *Fetcher {
+	return &Fetcher{
+		client: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: createTransport(false, false),
+		},
+		userAgent:  "V2rayNG/2.0.0",
+		skipVerify: false,
+		useDNS:     false,
+		hwid:       hwid,
 	}
 }
 
 // NewFetcherFull 创建完整配置的 Fetcher
-func NewFetcherFull(insecure, useDNS bool) *Fetcher {
+func NewFetcherFull(insecure, useDNS bool, hwid *string) *Fetcher {
 	return &Fetcher{
 		client: &http.Client{
 			Timeout:   30 * time.Second,
@@ -119,6 +137,7 @@ func NewFetcherFull(insecure, useDNS bool) *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: insecure,
 		useDNS:     useDNS,
+		hwid:       hwid,
 	}
 }
 
@@ -144,6 +163,12 @@ func (f *Fetcher) SetUseDNS(useDNS bool) {
 	f.client.Transport = createTransport(f.skipVerify, useDNS)
 }
 
+// SetHWID sets the hardware identifier
+func (f *Fetcher) SetHWID(hwid *string) {
+	f.hwid = hwid
+	f.client.Transport = createTransport(f.skipVerify, f.useDNS)
+}
+
 // Fetch 获取订阅内容
 func (f *Fetcher) Fetch(url string) (string, error) {
 	req, err := http.NewRequest("GET", url, nil)
@@ -152,6 +177,9 @@ func (f *Fetcher) Fetch(url string) (string, error) {
 	}
 
 	req.Header.Set("User-Agent", f.userAgent)
+	if f.hwid != nil {
+		req.Header.Set("X-HWID", *f.hwid)
+	}
 	req.Header.Set("Accept", "*/*")
 
 	resp, err := f.client.Do(req)
