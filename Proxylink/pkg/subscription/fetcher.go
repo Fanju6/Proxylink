@@ -166,7 +166,6 @@ func (f *Fetcher) SetUseDNS(useDNS bool) {
 // SetHWID sets the hardware identifier
 func (f *Fetcher) SetHWID(hwid *string) {
 	f.hwid = hwid
-	f.client.Transport = createTransport(f.skipVerify, f.useDNS)
 }
 
 // Fetch 获取订阅内容
