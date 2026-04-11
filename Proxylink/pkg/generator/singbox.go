@@ -10,44 +10,48 @@ import (
 
 // ===== sing-box outbound 结构体 =====
 
+type SingboxConfig struct {
+	Outbounds []*SingboxOutbound `json:"outbounds"`
+}
+
 type SingboxOutbound struct {
-	Type           string               `json:"type"`
-	Tag            string               `json:"tag,omitempty"`
-	Server         string               `json:"server"`
-	ServerPort     int                  `json:"server_port"`
-	TLS            *SingboxTLS          `json:"tls,omitempty"`
-	Transport      *SingboxTransport    `json:"transport,omitempty"`
+	Type       string            `json:"type"`
+	Tag        string            `json:"tag,omitempty"`
+	Server     string            `json:"server"`
+	ServerPort int               `json:"server_port"`
+	TLS        *SingboxTLS       `json:"tls,omitempty"`
+	Transport  *SingboxTransport `json:"transport,omitempty"`
 
 	// VLESS
-	UUID           string `json:"uuid,omitempty"`
-	Flow           string `json:"flow,omitempty"`
+	UUID string `json:"uuid,omitempty"`
+	Flow string `json:"flow,omitempty"`
 
 	// VMess
-	Security       string `json:"security,omitempty"`
-	AlterID        int    `json:"alter_id,omitempty"`
+	Security string `json:"security,omitempty"`
+	AlterID  int    `json:"alter_id,omitempty"`
 
 	// Trojan / SS / Hysteria2
-	Password       string `json:"password,omitempty"`
+	Password string `json:"password,omitempty"`
 
 	// Shadowsocks
-	Method         string `json:"method,omitempty"`
+	Method string `json:"method,omitempty"`
 
 	// Hysteria2
-	UpMbps         int                  `json:"up_mbps,omitempty"`
-	DownMbps       int                  `json:"down_mbps,omitempty"`
-	Obfs           *SingboxHy2Obfs      `json:"obfs,omitempty"`
-	ServerPorts    []string             `json:"server_ports,omitempty"`
-	HopInterval    string               `json:"hop_interval,omitempty"`
+	UpMbps      int             `json:"up_mbps,omitempty"`
+	DownMbps    int             `json:"down_mbps,omitempty"`
+	Obfs        *SingboxHy2Obfs `json:"obfs,omitempty"`
+	ServerPorts []string        `json:"server_ports,omitempty"`
+	HopInterval string          `json:"hop_interval,omitempty"`
 }
 
 type SingboxTLS struct {
-	Enabled    bool         `json:"enabled"`
-	ServerName string       `json:"server_name,omitempty"`
-	Insecure   bool         `json:"insecure,omitempty"`
-	ALPN       []string     `json:"alpn,omitempty"`
-	UTLS       *SingboxUTLS `json:"utls,omitempty"`
+	Enabled    bool            `json:"enabled"`
+	ServerName string          `json:"server_name,omitempty"`
+	Insecure   bool            `json:"insecure,omitempty"`
+	ALPN       []string        `json:"alpn,omitempty"`
+	UTLS       *SingboxUTLS    `json:"utls,omitempty"`
 	Reality    *SingboxReality `json:"reality,omitempty"`
-	ECH        *SingboxECH  `json:"ech,omitempty"`
+	ECH        *SingboxECH     `json:"ech,omitempty"`
 }
 
 type SingboxUTLS struct {
@@ -79,21 +83,22 @@ type SingboxHy2Obfs struct {
 	Password string `json:"password,omitempty"`
 }
 
-// GenerateSingboxOutbound 从 ProfileItem 生成 sing-box outbound JSON
+// GenerateSingboxOutbound 从 ProfileItem 生成 sing-box 配置 JSON
 func GenerateSingboxOutbound(p *model.ProfileItem) (string, error) {
 	ob := buildSingboxOutbound(p)
 	if ob == nil {
 		return "", nil
 	}
 
-	bytes, err := json.MarshalIndent(ob, "", "  ")
+	config := &SingboxConfig{Outbounds: []*SingboxOutbound{ob}}
+	bytes, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return "", err
 	}
 	return string(bytes), nil
 }
 
-// GenerateSingboxOutbounds 从多个 ProfileItem 生成 sing-box outbounds 数组
+// GenerateSingboxOutbounds 从多个 ProfileItem 生成 sing-box 配置 JSON
 func GenerateSingboxOutbounds(profiles []*model.ProfileItem) (string, error) {
 	var outbounds []*SingboxOutbound
 	for _, p := range profiles {
@@ -103,7 +108,8 @@ func GenerateSingboxOutbounds(profiles []*model.ProfileItem) (string, error) {
 		}
 	}
 
-	bytes, err := json.MarshalIndent(outbounds, "", "  ")
+	config := &SingboxConfig{Outbounds: outbounds}
+	bytes, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return "", err
 	}
