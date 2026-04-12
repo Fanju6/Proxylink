@@ -215,12 +215,6 @@ func writeMultipleFiles(profiles []*model.ProfileItem) error {
 	usedNames := make(map[string]int) // 跟踪已使用的文件名，避免重名覆盖
 
 	for i, profile := range profiles {
-		output, err := formatSingleProfile(profile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "警告: 格式化 %s 失败: %v\n", profile.Remarks, err)
-			continue
-		}
-
 		// 生成文件名
 		baseName := sanitizeFilename(profile.Remarks)
 		if baseName == "" {
@@ -229,10 +223,29 @@ func writeMultipleFiles(profiles []*model.ProfileItem) error {
 
 		// 重名检测: 相同名称追加序号
 		usedNames[baseName]++
+		nameCount := usedNames[baseName]
 		filename := baseName
-		if usedNames[baseName] > 1 {
-			filename = fmt.Sprintf("%s_%d", baseName, usedNames[baseName])
+		if nameCount > 1 {
+			filename = fmt.Sprintf("%s_%d", baseName, nameCount)
 		}
+
+		outputProfile := profile
+		if *outputFormat == "singbox" && nameCount > 1 {
+			profileCopy := *profile
+			tag := profileCopy.Remarks
+			if tag == "" {
+				tag = baseName
+			}
+			profileCopy.Remarks = fmt.Sprintf("%s_%d", tag, nameCount)
+			outputProfile = &profileCopy
+		}
+
+		output, err := formatSingleProfile(outputProfile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "警告: 格式化 %s 失败: %v\n", outputProfile.Remarks, err)
+			continue
+		}
+
 		filename = filename + ext
 
 		filepath := filepath.Join(*outputDir, filename)
