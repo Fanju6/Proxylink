@@ -101,9 +101,12 @@ func GenerateSingboxOutbound(p *model.ProfileItem) (string, error) {
 // GenerateSingboxOutbounds 从多个 ProfileItem 生成 sing-box 配置 JSON
 func GenerateSingboxOutbounds(profiles []*model.ProfileItem) (string, error) {
 	var outbounds []*SingboxOutbound
-	for _, p := range profiles {
+	usedTags := make(map[string]int)
+
+	for i, p := range profiles {
 		ob := buildSingboxOutbound(p)
 		if ob != nil {
+			ob.Tag = nextSingboxTag(p.Remarks, i, usedTags)
 			outbounds = append(outbounds, ob)
 		}
 	}
@@ -114,6 +117,18 @@ func GenerateSingboxOutbounds(profiles []*model.ProfileItem) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
+}
+
+func nextSingboxTag(tag string, index int, usedTags map[string]int) string {
+	if tag == "" {
+		tag = "node_" + strconv.Itoa(index+1)
+	}
+
+	usedTags[tag]++
+	if usedTags[tag] > 1 {
+		return tag + "_" + strconv.Itoa(usedTags[tag])
+	}
+	return tag
 }
 
 func buildSingboxOutbound(p *model.ProfileItem) *SingboxOutbound {
