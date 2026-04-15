@@ -40,10 +40,17 @@ func NewConverterWithDNS() *Converter {
 	}
 }
 
-// NewConverterFull 创建完整配置的转换器
-func NewConverterFull(insecure, useDNS bool) *Converter {
+// NewConverterWithHWID creates a new Converter with hardware identifier
+func NewConverterWithHWID(hwid *string) *Converter {
 	return &Converter{
-		fetcher: NewFetcherFull(insecure, useDNS),
+		fetcher: NewFetcherWithHWID(hwid),
+	}
+}
+
+// NewConverterFull 创建完整配置的转换器
+func NewConverterFull(insecure, useDNS bool, hwid *string) *Converter {
+	return &Converter{
+		fetcher: NewFetcherFull(insecure, useDNS, hwid),
 	}
 }
 
@@ -55,6 +62,11 @@ func (c *Converter) SetInsecure(insecure bool) {
 // SetUseDNS 设置是否使用公共 DNS
 func (c *Converter) SetUseDNS(useDNS bool) {
 	c.fetcher.SetUseDNS(useDNS)
+}
+
+// SetHWID sets the hardware identifier
+func (c *Converter) SetHWID(hwid *string) {
+	c.fetcher.SetHWID(hwid)
 }
 
 // Convert 从 URL 获取并转换订阅
