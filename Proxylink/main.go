@@ -20,6 +20,7 @@ var (
 	parseURI     = flag.String("parse", "", "解析单条链接")
 	parseFile    = flag.String("file", "", "从文件批量解析")
 	parseXray    = flag.String("xray", "", "从 Xray JSON 配置文件解析")
+	parseSingbox = flag.String("singbox", "", "从 sing-box JSON 配置文件解析")
 	subURL       = flag.String("sub", "", "订阅 URL")
 	outputFormat = flag.String("format", "json", "输出格式: json, xray, singbox, uri")
 	outputFile   = flag.String("o", "", "输出到文件 (单文件模式)")
@@ -49,6 +50,8 @@ func main() {
 		err = handleParseFile(*parseFile)
 	case *parseXray != "":
 		err = handleParseXray(*parseXray)
+	case *parseSingbox != "":
+		err = handleParseSingbox(*parseSingbox)
 	case *subURL != "":
 		err = handleSubscription(*subURL)
 	case flag.NArg() > 0:
@@ -71,6 +74,7 @@ func usage() {
   proxylink -parse "vless://..."
   proxylink -file nodes.txt
   proxylink -xray config.json
+  proxylink -singbox config.json
   proxylink -sub "https://example.com/sub"
   echo "vless://..." | proxylink
 
@@ -145,6 +149,18 @@ func handleParseXray(filename string) error {
 		return err
 	}
 	profiles, err := parser.ParseXrayConfig(content)
+	if err != nil {
+		return err
+	}
+	return outputProfiles(profiles)
+}
+
+func handleParseSingbox(filename string) error {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	profiles, err := parser.ParseSingboxConfig(content)
 	if err != nil {
 		return err
 	}
