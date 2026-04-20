@@ -73,6 +73,11 @@ func (c *Converter) SetUserAgent(ua string) {
 	c.fetcher.SetUserAgent(ua)
 }
 
+// SetHWID 设置订阅请求的设备标识。
+func (c *Converter) SetHWID(hwid string) {
+	c.fetcher.SetHWID(hwid)
+}
+
 // Convert 从 URL 获取并转换订阅
 func (c *Converter) Convert(url string) (*ConvertResult, error) {
 	// 获取订阅内容

@@ -81,6 +81,7 @@ proxylink -xray config.json -format uri
 | `-insecure` | 订阅请求跳过 TLS 证书验证 |
 | `-dns` | 订阅请求使用内置公共 DNS |
 | `-ua <value>` | 指定订阅请求 User-Agent；留空时会自动处理客户端版本提示 |
+| `-hwid <value>` | 指定订阅请求 HWID 设备标识，作为 `X-HWID` 请求头发送 |
 | `-h` | 显示帮助 |
 
 `-insecure` 和 `-dns` 只影响 `-sub` 订阅拉取过程，不改变本地链接解析结果。

@@ -24,6 +24,7 @@ var publicDNSServers = []string{
 type Fetcher struct {
 	client     *http.Client
 	userAgent  string
+	hwid       string
 	skipVerify bool
 	useDNS     bool // 是否使用自定义 DNS
 	autoRetry  bool // 订阅返回客户端版本提示时是否自动更换 UA 重试
@@ -136,6 +137,11 @@ func (f *Fetcher) SetUserAgent(ua string) {
 	f.autoRetry = false
 }
 
+// SetHWID 设置订阅请求的设备标识。
+func (f *Fetcher) SetHWID(hwid string) {
+	f.hwid = hwid
+}
+
 // SetTimeout 设置超时时间
 func (f *Fetcher) SetTimeout(timeout time.Duration) {
 	f.client.Timeout = timeout
@@ -166,6 +172,9 @@ func (f *Fetcher) fetchWithUserAgent(url, userAgent string) (string, error) {
 
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "*/*")
+	if f.hwid != "" {
+		req.Header.Set("X-HWID", f.hwid)
+	}
 
 	resp, err := f.client.Do(req)
 	if err != nil {
