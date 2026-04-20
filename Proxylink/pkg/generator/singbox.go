@@ -288,11 +288,21 @@ func buildSingboxHysteria2(ob *SingboxOutbound, p *model.ProfileItem) {
 
 	// 端口跳跃
 	if p.PortHopping != "" {
-		ob.ServerPorts = []string{p.PortHopping}
+		ob.ServerPorts = normalizeHysteriaServerPorts(p.PortHopping)
 		if p.PortHoppingInterval != "" {
 			ob.HopInterval = p.PortHoppingInterval + "s"
 		}
 	}
+}
+
+func normalizeHysteriaServerPorts(serverPorts string) []string {
+	ports := splitAndTrim(serverPorts, ",")
+	for i, port := range ports {
+		if strings.Count(port, "-") == 1 && !strings.Contains(port, ":") {
+			ports[i] = strings.Replace(port, "-", ":", 1)
+		}
+	}
+	return ports
 }
 
 // parseMbps 解析带宽字符串为 Mbps 整型值
