@@ -31,6 +31,10 @@ func Parse(uri string) (*model.ProfileItem, error) {
 		return ParseWireGuard(uri)
 	case strings.HasPrefix(uri, "hysteria2://"), strings.HasPrefix(uri, "hy2://"):
 		return ParseHysteria2(uri)
+	case strings.HasPrefix(uri, "anytls://"):
+		return ParseAnyTLS(uri)
+	case strings.HasPrefix(uri, "tuic://"):
+		return ParseTUIC(uri)
 	default:
 		return nil, errors.New("unsupported protocol: " + uri[:min(20, len(uri))])
 	}

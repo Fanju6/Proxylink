@@ -17,11 +17,11 @@ type ClashConfig struct {
 
 // ClashProxy Clash 代理节点 YAML 结构
 type ClashProxy struct {
-	Name     string `yaml:"name"`
-	Type     string `yaml:"type"`
-	Server   string `yaml:"server"`
-	Port     int    `yaml:"port"`
-	UDP      bool   `yaml:"udp"`
+	Name   string `yaml:"name"`
+	Type   string `yaml:"type"`
+	Server string `yaml:"server"`
+	Port   int    `yaml:"port"`
+	UDP    bool   `yaml:"udp"`
 
 	// VLESS / VMess
 	UUID    string `yaml:"uuid"`
@@ -55,12 +55,21 @@ type ClashProxy struct {
 	XhttpOpts *ClashXhttpOpts `yaml:"xhttp-opts"`
 
 	// Hysteria2
-	Ports       string `yaml:"ports"`
-	HopInterval int    `yaml:"hop-interval"`
-	Up          string `yaml:"up"`
-	Down        string `yaml:"down"`
-	Obfs        string `yaml:"obfs"`
+	Ports        string `yaml:"ports"`
+	HopInterval  int    `yaml:"hop-interval"`
+	Up           string `yaml:"up"`
+	Down         string `yaml:"down"`
+	Obfs         string `yaml:"obfs"`
 	ObfsPassword string `yaml:"obfs-password"`
+
+	// TUIC
+	DisableSNI           bool   `yaml:"disable-sni"`
+	CongestionController string `yaml:"congestion-controller"`
+	UDPRelayMode         string `yaml:"udp-relay-mode"`
+	UDPOverStream        bool   `yaml:"udp-over-stream"`
+	ReduceRTT            bool   `yaml:"reduce-rtt"`
+	Heartbeat            string `yaml:"heartbeat"`
+	HeartbeatInterval    string `yaml:"heartbeat-interval"`
 }
 
 type ClashRealityOpts struct {
@@ -136,6 +145,10 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 		configType = model.TROJAN
 	case "hysteria2", "hy2":
 		configType = model.HYSTERIA2
+	case "anytls":
+		configType = model.ANYTLS
+	case "tuic":
+		configType = model.TUIC
 	default:
 		return nil // 不支持的协议
 	}
@@ -144,6 +157,7 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 	p.Remarks = cp.Name
 	p.Server = cp.Server
 	p.ServerPort = strconv.Itoa(cp.Port)
+	p.UDP = cp.UDP
 
 	// 协议特定字段
 	switch configType {
@@ -172,6 +186,20 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 		}
 		p.BandwidthUp = cp.Up
 		p.BandwidthDown = cp.Down
+	case model.ANYTLS:
+		p.Password = cp.Password
+	case model.TUIC:
+		p.UUID = cp.UUID
+		p.Password = cp.Password
+		p.CongestionControl = cp.CongestionController
+		p.UDPRelayMode = cp.UDPRelayMode
+		p.UDPOverStream = cp.UDPOverStream
+		p.ZeroRTTHandshake = cp.ReduceRTT
+		p.Heartbeat = cp.Heartbeat
+		if p.Heartbeat == "" {
+			p.Heartbeat = cp.HeartbeatInterval
+		}
+		p.DisableSNI = cp.DisableSNI
 	}
 
 	// 传输层
@@ -199,6 +227,10 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 	}
 
 	// SNI (servername 优先)
+	if (configType == model.ANYTLS || configType == model.TUIC) && p.Security == "" {
+		p.Security = "tls"
+	}
+
 	p.SNI = cp.Servername
 	if p.SNI == "" {
 		p.SNI = cp.SNI

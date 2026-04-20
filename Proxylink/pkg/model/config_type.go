@@ -12,6 +12,8 @@ const (
 	TROJAN
 	WIREGUARD
 	HYSTERIA2
+	ANYTLS
+	TUIC
 	CUSTOM
 )
 
@@ -34,6 +36,10 @@ func (c ConfigType) String() string {
 		return "wireguard"
 	case HYSTERIA2:
 		return "hysteria2"
+	case ANYTLS:
+		return "anytls"
+	case TUIC:
+		return "tuic"
 	case CUSTOM:
 		return "custom"
 	default:
@@ -60,6 +66,10 @@ func (c ConfigType) ProtocolScheme() string {
 		return "wireguard://"
 	case HYSTERIA2:
 		return "hysteria2://"
+	case ANYTLS:
+		return "anytls://"
+	case TUIC:
+		return "tuic://"
 	default:
 		return ""
 	}

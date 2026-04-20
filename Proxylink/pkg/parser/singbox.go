@@ -72,6 +72,10 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 		configType = model.TROJAN
 	case "hysteria2", "hy2":
 		configType = model.HYSTERIA2
+	case "anytls":
+		configType = model.ANYTLS
+	case "tuic":
+		configType = model.TUIC
 	default:
 		return nil // 不支持的协议
 	}
@@ -121,10 +125,26 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 				p.PortHoppingInterval = strings.TrimSuffix(ob.HopInterval, "s")
 			}
 		}
+	case model.ANYTLS:
+		p.Password = ob.Password
+	case model.TUIC:
+		p.UUID = ob.UUID
+		p.Password = ob.Password
+		p.CongestionControl = ob.CongestionControl
+		p.UDPRelayMode = ob.UDPRelayMode
+		p.UDPOverStream = ob.UDPOverStream
+		p.ZeroRTTHandshake = ob.ZeroRTTHandshake
+		p.Heartbeat = ob.Heartbeat
 	}
 
 	// 传输层
 	p.Network = "tcp"
+	if configType == model.TUIC {
+		if ob.Network != "" {
+			p.Network = ob.Network
+		}
+		p.UDP = ob.Network == "" || strings.Contains(ob.Network, "udp")
+	}
 	if ob.Transport != nil {
 		p.Network = ob.Transport.Type
 		if ob.Transport.Path != "" && ob.Transport.Path != "/" {
@@ -161,6 +181,7 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 
 		p.SNI = ob.TLS.ServerName
 		p.Insecure = ob.TLS.Insecure
+		p.DisableSNI = ob.TLS.DisableSNI
 
 		if len(ob.TLS.ALPN) > 0 {
 			p.ALPN = strings.Join(ob.TLS.ALPN, ",")
@@ -179,9 +200,13 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 	if configType == model.TROJAN && p.Security == "" {
 		p.Security = "tls"
 	}
-	
+
 	// Hysteria2 默认 TLS
 	if configType == model.HYSTERIA2 && p.Security == "" {
+		p.Security = "tls"
+	}
+
+	if (configType == model.ANYTLS || configType == model.TUIC) && p.Security == "" {
 		p.Security = "tls"
 	}
 

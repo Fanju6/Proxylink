@@ -24,6 +24,10 @@ func ToURI(profile *model.ProfileItem) string {
 		return parser.ToWireGuardURI(profile)
 	case model.HYSTERIA2:
 		return parser.ToHysteria2URI(profile)
+	case model.ANYTLS:
+		return parser.ToAnyTLSURI(profile)
+	case model.TUIC:
+		return parser.ToTUICURI(profile)
 	default:
 		return ""
 	}

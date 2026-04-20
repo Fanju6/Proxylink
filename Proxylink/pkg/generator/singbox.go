@@ -19,6 +19,7 @@ type SingboxOutbound struct {
 	Tag        string            `json:"tag,omitempty"`
 	Server     string            `json:"server"`
 	ServerPort int               `json:"server_port"`
+	Network    string            `json:"network,omitempty"`
 	TLS        *SingboxTLS       `json:"tls,omitempty"`
 	Transport  *SingboxTransport `json:"transport,omitempty"`
 
@@ -42,12 +43,20 @@ type SingboxOutbound struct {
 	Obfs        *SingboxHy2Obfs `json:"obfs,omitempty"`
 	ServerPorts []string        `json:"server_ports,omitempty"`
 	HopInterval string          `json:"hop_interval,omitempty"`
+
+	// TUIC
+	CongestionControl string `json:"congestion_control,omitempty"`
+	UDPRelayMode      string `json:"udp_relay_mode,omitempty"`
+	UDPOverStream     bool   `json:"udp_over_stream,omitempty"`
+	ZeroRTTHandshake  bool   `json:"zero_rtt_handshake,omitempty"`
+	Heartbeat         string `json:"heartbeat,omitempty"`
 }
 
 type SingboxTLS struct {
 	Enabled    bool            `json:"enabled"`
 	ServerName string          `json:"server_name,omitempty"`
 	Insecure   bool            `json:"insecure,omitempty"`
+	DisableSNI bool            `json:"disable_sni,omitempty"`
 	ALPN       []string        `json:"alpn,omitempty"`
 	UTLS       *SingboxUTLS    `json:"utls,omitempty"`
 	Reality    *SingboxReality `json:"reality,omitempty"`
@@ -164,6 +173,19 @@ func buildSingboxOutbound(p *model.ProfileItem) *SingboxOutbound {
 		ob.Type = "hysteria2"
 		ob.Password = p.Password
 		buildSingboxHysteria2(ob, p)
+	case model.ANYTLS:
+		ob.Type = "anytls"
+		ob.Password = p.Password
+	case model.TUIC:
+		ob.Type = "tuic"
+		ob.UUID = p.UUID
+		ob.Password = p.Password
+		ob.Network = buildSingboxTUICNetwork(p)
+		ob.CongestionControl = p.CongestionControl
+		ob.UDPRelayMode = p.UDPRelayMode
+		ob.UDPOverStream = p.UDPOverStream
+		ob.ZeroRTTHandshake = p.ZeroRTTHandshake
+		ob.Heartbeat = p.Heartbeat
 	default:
 		return nil
 	}
@@ -174,11 +196,21 @@ func buildSingboxOutbound(p *model.ProfileItem) *SingboxOutbound {
 	}
 
 	// TLS
-	if p.Security == "tls" || p.Security == "reality" || p.ConfigType == model.TROJAN || p.ConfigType == model.HYSTERIA2 {
+	if p.Security == "tls" || p.Security == "reality" || p.ConfigType == model.TROJAN || p.ConfigType == model.HYSTERIA2 || p.ConfigType == model.ANYTLS || p.ConfigType == model.TUIC {
 		ob.TLS = buildSingboxTLS(p)
 	}
 
 	return ob
+}
+
+func buildSingboxTUICNetwork(p *model.ProfileItem) string {
+	if p.Network != "" && p.Network != "tcp" {
+		return p.Network
+	}
+	if !p.UDP {
+		return "tcp"
+	}
+	return ""
 }
 
 func buildSingboxTransport(p *model.ProfileItem) *SingboxTransport {
@@ -235,6 +267,7 @@ func buildSingboxTLS(p *model.ProfileItem) *SingboxTLS {
 
 	// Insecure
 	tls.Insecure = p.Insecure
+	tls.DisableSNI = p.DisableSNI
 
 	// ALPN
 	if p.ALPN != "" {

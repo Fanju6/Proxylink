@@ -11,13 +11,15 @@ type ProfileItem struct {
 	ServerPort     string     `json:"serverPort"`
 
 	// 认证信息
-	Password string `json:"password,omitempty"` // UUID (VLESS/VMess) / 密码 (SS/Trojan/Hysteria2)
+	Password string `json:"password,omitempty"` // UUID (VLESS/VMess) / 密码 (SS/Trojan/Hysteria2/AnyTLS/TUIC)
 	Method   string `json:"method,omitempty"`   // 加密方法 (SS) / encryption (VLESS) / scy (VMess)
 	Flow     string `json:"flow,omitempty"`     // 流控 (VLESS/Trojan)
 	Username string `json:"username,omitempty"` // 用户名 (Socks/HTTP)
+	UUID     string `json:"uuid,omitempty"`     // TUIC UUID
 	AlterId  int    `json:"alterId,omitempty"`  // VMess alterId
 
 	// 传输层配置
+	UDP          bool   `json:"udp,omitempty"`          // 启用 UDP
 	Network      string `json:"network,omitempty"`      // tcp/ws/grpc/h2/kcp/quic/httpupgrade/xhttp
 	HeaderType   string `json:"headerType,omitempty"`   // 伪装类型
 	Host         string `json:"host,omitempty"`         // 主机头
@@ -39,6 +41,7 @@ type ProfileItem struct {
 	Fingerprint   string `json:"fingerprint,omitempty"`   // TLS 指纹
 	Insecure      bool   `json:"insecure,omitempty"`      // 跳过证书验证
 	Mldsa65Verify string `json:"mldsa65Verify,omitempty"` // MLDSA65 验证 (pqv)
+	DisableSNI    bool   `json:"disableSNI,omitempty"`    // 禁用 SNI
 
 	// Reality 配置
 	PublicKey string `json:"publicKey,omitempty"` // Reality 公钥
@@ -64,6 +67,13 @@ type ProfileItem struct {
 	PinSHA256           string `json:"pinSHA256,omitempty"`           // 证书指纹
 	BandwidthDown       string `json:"bandwidthDown,omitempty"`       // 下行带宽
 	BandwidthUp         string `json:"bandwidthUp,omitempty"`         // 上行带宽
+
+	// TUIC 配置
+	CongestionControl string `json:"congestionControl,omitempty"`
+	UDPRelayMode      string `json:"udpRelayMode,omitempty"`
+	UDPOverStream     bool   `json:"udpOverStream,omitempty"`
+	ZeroRTTHandshake  bool   `json:"zeroRTTHandshake,omitempty"`
+	Heartbeat         string `json:"heartbeat,omitempty"`
 }
 
 // GetServerAddressAndPort 返回 server:port 格式的地址

@@ -4,7 +4,7 @@ Proxylink 是一个用 Go 编写的代理链接解析和配置转换工具。它
 
 ## 功能
 
-- 解析 VLESS、VMess、Shadowsocks、Trojan、Socks、HTTP、WireGuard、Hysteria2 链接
+- 解析 VLESS、VMess、Shadowsocks、Trojan、Socks、HTTP、WireGuard、Hysteria2、AnyTLS、TUIC 节点
 - 支持从订阅 URL、文件、stdin、Clash YAML 和 Xray JSON 读取节点
 - 支持输出 ProfileItem JSON、Xray 配置、sing-box 配置和 URI 链接
 - 支持多节点批量转换，以及按节点拆分为多个文件
@@ -142,6 +142,8 @@ HK_3
 - Shadowsocks
 - Trojan
 - Hysteria2
+- AnyTLS
+- TUIC
 
 当前 sing-box transport 支持：
 
@@ -252,3 +254,5 @@ Proxylink/
 | HTTP | `http://user:pass@server:8080#name` |
 | WireGuard | `wireguard://key@server:51820?...` 或 WireGuard `.conf` |
 | Hysteria2 | `hysteria2://auth@server:443?sni=example.com#name` |
+| AnyTLS | `anytls://password@server:443?sni=example.com#name` |
+| TUIC | `tuic://uuid:password@server:443?sni=example.com#name` |
