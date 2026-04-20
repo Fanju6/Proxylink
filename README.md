@@ -80,6 +80,7 @@ proxylink -xray config.json -format uri
 | `-pretty` | 美化 JSON 输出，默认为 true |
 | `-insecure` | 订阅请求跳过 TLS 证书验证 |
 | `-dns` | 订阅请求使用内置公共 DNS |
+| `-ua <value>` | 指定订阅请求 User-Agent；留空时会自动处理客户端版本提示 |
 | `-h` | 显示帮助 |
 
 `-insecure` 和 `-dns` 只影响 `-sub` 订阅拉取过程，不改变本地链接解析结果。

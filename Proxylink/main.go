@@ -29,6 +29,7 @@ var (
 	prettyPrint  = flag.Bool("pretty", true, "美化 JSON 输出")
 	insecure     = flag.Bool("insecure", false, "跳过 TLS 证书验证")
 	useDNS       = flag.Bool("dns", false, "使用公共 DNS")
+	userAgent    = flag.String("ua", "", "订阅请求 User-Agent；留空时自动处理客户端版本提示")
 	showHelp     = flag.Bool("h", false, "显示帮助")
 )
 
@@ -170,6 +171,9 @@ func handleParseSingbox(filename string) error {
 func handleSubscription(url string) error {
 	// 使用完整配置创建转换器
 	converter := subscription.NewConverterFull(*insecure, *useDNS)
+	if *userAgent != "" {
+		converter.SetUserAgent(*userAgent)
+	}
 
 	result, err := converter.Convert(url)
 	if err != nil {

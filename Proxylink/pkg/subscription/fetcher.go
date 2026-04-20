@@ -1,13 +1,16 @@
-﻿package subscription
+package subscription
 
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"time"
 )
+
+const maxSubscriptionSize = 20 << 20
 
 // 公共 DNS 服务器列表
 var publicDNSServers = []string{
@@ -23,6 +26,7 @@ type Fetcher struct {
 	userAgent  string
 	skipVerify bool
 	useDNS     bool // 是否使用自定义 DNS
+	autoRetry  bool // 订阅返回客户端版本提示时是否自动更换 UA 重试
 }
 
 // createCustomDialer 创建使用公共 DNS 的自定义拨号器
@@ -80,6 +84,7 @@ func NewFetcher() *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: false,
 		useDNS:     false,
+		autoRetry:  true,
 	}
 }
 
@@ -93,6 +98,7 @@ func NewFetcherInsecure() *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: true,
 		useDNS:     false,
+		autoRetry:  true,
 	}
 }
 
@@ -106,6 +112,7 @@ func NewFetcherWithDNS() *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: false,
 		useDNS:     true,
+		autoRetry:  true,
 	}
 }
 
@@ -119,12 +126,14 @@ func NewFetcherFull(insecure, useDNS bool) *Fetcher {
 		userAgent:  "V2rayNG/2.0.0",
 		skipVerify: insecure,
 		useDNS:     useDNS,
+		autoRetry:  true,
 	}
 }
 
 // SetUserAgent 设置 User-Agent
 func (f *Fetcher) SetUserAgent(ua string) {
 	f.userAgent = ua
+	f.autoRetry = false
 }
 
 // SetTimeout 设置超时时间
@@ -146,12 +155,16 @@ func (f *Fetcher) SetUseDNS(useDNS bool) {
 
 // Fetch 获取订阅内容
 func (f *Fetcher) Fetch(url string) (string, error) {
+	return f.fetchWithUserAgent(url, f.userAgent)
+}
+
+func (f *Fetcher) fetchWithUserAgent(url, userAgent string) (string, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", err
 	}
 
-	req.Header.Set("User-Agent", f.userAgent)
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "*/*")
 
 	resp, err := f.client.Do(req)
@@ -160,9 +173,16 @@ func (f *Fetcher) Fetch(url string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("subscription request failed: HTTP %d %s", resp.StatusCode, resp.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSubscriptionSize+1))
 	if err != nil {
 		return "", err
+	}
+	if len(body) > maxSubscriptionSize {
+		return "", fmt.Errorf("subscription content exceeds %d bytes", maxSubscriptionSize)
 	}
 
 	return string(body), nil

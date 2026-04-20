@@ -1,9 +1,20 @@
 package subscription
 
 import (
+	"strings"
+
 	"proxylink/pkg/model"
 	"proxylink/pkg/parser"
+	"proxylink/pkg/util"
 )
+
+var fallbackUserAgents = []string{
+	"clash-verge/v2.2.3",
+	"ClashMetaForAndroid/2.11.14.Meta",
+	"mihomo/1.19.0",
+	"sing-box/1.12.0",
+	"v2rayN/7.14.0",
+}
 
 // ConvertResult 转换结果
 type ConvertResult struct {
@@ -57,12 +68,30 @@ func (c *Converter) SetUseDNS(useDNS bool) {
 	c.fetcher.SetUseDNS(useDNS)
 }
 
+// SetUserAgent 设置订阅请求 User-Agent，手动设置后不再自动换 UA 重试。
+func (c *Converter) SetUserAgent(ua string) {
+	c.fetcher.SetUserAgent(ua)
+}
+
 // Convert 从 URL 获取并转换订阅
 func (c *Converter) Convert(url string) (*ConvertResult, error) {
 	// 获取订阅内容
 	content, err := c.fetcher.Fetch(url)
 	if err != nil {
 		return nil, err
+	}
+	if c.fetcher.autoRetry && isOutdatedClientResponse(content) {
+		for _, userAgent := range fallbackUserAgents {
+			if userAgent == c.fetcher.userAgent {
+				continue
+			}
+			retryContent, retryErr := c.fetcher.fetchWithUserAgent(url, userAgent)
+			if retryErr != nil || isOutdatedClientResponse(retryContent) {
+				continue
+			}
+			content = retryContent
+			break
+		}
 	}
 
 	// 转换内容
@@ -107,6 +136,29 @@ func (c *Converter) ConvertContent(content string) (*ConvertResult, error) {
 	}
 
 	return result, nil
+}
+
+func isOutdatedClientResponse(content string) bool {
+	for _, text := range responseTextCandidates(content) {
+		decodedText := util.URLDecode(text)
+		lower := strings.ToLower(decodedText)
+		if strings.Contains(decodedText, "客户端版本太老") ||
+			strings.Contains(decodedText, "版本太老") ||
+			strings.Contains(lower, "client version") && strings.Contains(lower, "old") ||
+			strings.Contains(lower, "too old") ||
+			strings.Contains(lower, "fake_node_password") {
+			return true
+		}
+	}
+	return false
+}
+
+func responseTextCandidates(content string) []string {
+	candidates := []string{content}
+	if decoded, err := util.Base64Decode(content); err == nil && decoded != "" && decoded != content {
+		candidates = append(candidates, decoded)
+	}
+	return candidates
 }
 
 // ConvertWithFilter 转换并过滤
