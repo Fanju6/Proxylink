@@ -35,7 +35,9 @@ type SingboxOutbound struct {
 	Password string `json:"password,omitempty"`
 
 	// Shadowsocks
-	Method string `json:"method,omitempty"`
+	Method     string `json:"method,omitempty"`
+	Plugin     string `json:"plugin,omitempty"`
+	PluginOpts string `json:"plugin_opts,omitempty"`
 
 	// Hysteria2
 	UpMbps      int             `json:"up_mbps,omitempty"`
@@ -167,6 +169,8 @@ func buildSingboxOutbound(p *model.ProfileItem) *SingboxOutbound {
 		ob.Type = "shadowsocks"
 		ob.Method = p.Method
 		ob.Password = p.Password
+		ob.Plugin = p.Plugin
+		ob.PluginOpts = p.PluginOpts
 	case model.TROJAN:
 		ob.Type = "trojan"
 		ob.Password = p.Password

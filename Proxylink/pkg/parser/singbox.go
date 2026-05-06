@@ -103,6 +103,8 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 	case model.SHADOWSOCKS:
 		p.Method = ob.Method
 		p.Password = ob.Password
+		p.Plugin = ob.Plugin
+		p.PluginOpts = ob.PluginOpts
 	case model.TROJAN:
 		p.Password = ob.Password
 	case model.HYSTERIA2:

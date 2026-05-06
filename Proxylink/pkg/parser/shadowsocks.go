@@ -74,6 +74,10 @@ func parseShadowsocksSIP002(uri string) (*model.ProfileItem, error) {
 
 // parseSSPlugin 解析 Shadowsocks 插件参数
 func parseSSPlugin(config *model.ProfileItem, plugin string) {
+	name, opts := splitSSPlugin(plugin)
+	config.Plugin = normalizeSSPluginName(name)
+	config.PluginOpts = opts
+
 	if strings.Contains(plugin, "obfs=http") || strings.Contains(plugin, "obfs-local") {
 		// 解析 obfs-http 插件
 		config.Network = "tcp"
@@ -93,6 +97,24 @@ func parseSSPlugin(config *model.ProfileItem, plugin string) {
 		if path, ok := params["path"]; ok {
 			config.Path = path
 		}
+	}
+}
+
+func splitSSPlugin(plugin string) (string, string) {
+	parts := strings.SplitN(plugin, ";", 2)
+	name := strings.TrimSpace(parts[0])
+	if len(parts) == 1 {
+		return name, ""
+	}
+	return name, strings.TrimSpace(parts[1])
+}
+
+func normalizeSSPluginName(name string) string {
+	switch strings.TrimSpace(strings.ToLower(name)) {
+	case "simple-obfs":
+		return "obfs-local"
+	default:
+		return strings.TrimSpace(name)
 	}
 }
 
@@ -161,11 +183,24 @@ func parseShadowsocksLegacy(uri string) (*model.ProfileItem, error) {
 func ToShadowsocksURI(config *model.ProfileItem) string {
 	userInfo := util.Base64EncodeURL(config.Method + ":" + config.Password)
 	host := util.GetIPv6Address(config.Server) + ":" + config.ServerPort
+	query := url.Values{}
 
+	if config.Plugin != "" {
+		plugin := config.Plugin
+		if config.PluginOpts != "" {
+			plugin += ";" + config.PluginOpts
+		}
+		query.Set("plugin", plugin)
+	}
+
+	queryStr := ""
+	if len(query) > 0 {
+		queryStr = "?" + query.Encode()
+	}
 	remarks := ""
 	if config.Remarks != "" {
 		remarks = "#" + util.URLEncode(config.Remarks)
 	}
 
-	return "ss://" + userInfo + "@" + host + remarks
+	return "ss://" + userInfo + "@" + host + queryStr + remarks
 }

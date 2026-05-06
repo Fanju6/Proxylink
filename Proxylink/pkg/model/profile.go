@@ -11,12 +11,14 @@ type ProfileItem struct {
 	ServerPort     string     `json:"serverPort"`
 
 	// 认证信息
-	Password string `json:"password,omitempty"` // UUID (VLESS/VMess) / 密码 (SS/Trojan/Hysteria2/AnyTLS/TUIC)
-	Method   string `json:"method,omitempty"`   // 加密方法 (SS) / encryption (VLESS) / scy (VMess)
-	Flow     string `json:"flow,omitempty"`     // 流控 (VLESS/Trojan)
-	Username string `json:"username,omitempty"` // 用户名 (Socks/HTTP)
-	UUID     string `json:"uuid,omitempty"`     // TUIC UUID
-	AlterId  int    `json:"alterId,omitempty"`  // VMess alterId
+	Password   string `json:"password,omitempty"`   // UUID (VLESS/VMess) / 密码 (SS/Trojan/Hysteria2/AnyTLS/TUIC)
+	Method     string `json:"method,omitempty"`     // 加密方法 (SS) / encryption (VLESS) / scy (VMess)
+	Plugin     string `json:"plugin,omitempty"`     // Shadowsocks SIP003 plugin
+	PluginOpts string `json:"pluginOpts,omitempty"` // Shadowsocks SIP003 plugin options
+	Flow       string `json:"flow,omitempty"`       // 流控 (VLESS/Trojan)
+	Username   string `json:"username,omitempty"`   // 用户名 (Socks/HTTP)
+	UUID       string `json:"uuid,omitempty"`       // TUIC UUID
+	AlterId    int    `json:"alterId,omitempty"`    // VMess alterId
 
 	// 传输层配置
 	UDP          bool   `json:"udp,omitempty"`          // 启用 UDP
