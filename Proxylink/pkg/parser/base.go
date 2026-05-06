@@ -2,6 +2,7 @@ package parser
 
 import (
 	"net/url"
+	"strings"
 
 	"proxylink/pkg/model"
 	"proxylink/pkg/util"
@@ -39,7 +40,7 @@ func parseQueryParams(config *model.ProfileItem, query url.Values) {
 	config.Fingerprint = query.Get("fp")
 	config.Flow = query.Get("flow")
 	config.Mldsa65Verify = query.Get("pqv")
-	config.EchConfigList = query.Get("ech")
+	parseECHParam(config, query.Get("ech"))
 	config.PinnedCA256 = query.Get("pcs")
 
 	// Insecure - 支持多种参数名
@@ -107,8 +108,8 @@ func buildQueryParams(config *model.ProfileItem) url.Values {
 	if config.SpiderX != "" {
 		query.Set("spx", config.SpiderX)
 	}
-	if config.EchConfigList != "" {
-		query.Set("ech", config.EchConfigList)
+	if ech := buildECHParam(config); ech != "" {
+		query.Set("ech", ech)
 	}
 	if config.PinnedCA256 != "" {
 		query.Set("pcs", config.PinnedCA256)
@@ -201,4 +202,41 @@ func buildURI(scheme string, userInfo string, config *model.ProfileItem, query u
 	}
 
 	return scheme + userInfo + host + queryStr + remarks
+}
+
+func parseECHParam(config *model.ProfileItem, ech string) {
+	ech = strings.TrimSpace(ech)
+	if ech == "" {
+		return
+	}
+
+	if looksLikeECHConfig(ech) {
+		config.EchConfigList = ech
+		return
+	}
+
+	parts := strings.SplitN(ech, "+", 2)
+	config.EchQueryServerName = strings.TrimSpace(parts[0])
+	if len(parts) > 1 {
+		config.EchForceQuery = strings.TrimSpace(parts[1])
+	}
+}
+
+func buildECHParam(config *model.ProfileItem) string {
+	if config.EchConfigList != "" {
+		return config.EchConfigList
+	}
+	if config.EchQueryServerName == "" {
+		return ""
+	}
+	if config.EchForceQuery != "" {
+		return config.EchQueryServerName + "+" + config.EchForceQuery
+	}
+	return config.EchQueryServerName
+}
+
+func looksLikeECHConfig(ech string) bool {
+	return strings.Contains(ech, "-----BEGIN") ||
+		strings.Contains(ech, "ECH CONFIG") ||
+		strings.Contains(ech, "\n")
 }

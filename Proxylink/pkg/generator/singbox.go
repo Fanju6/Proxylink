@@ -75,8 +75,9 @@ type SingboxReality struct {
 }
 
 type SingboxECH struct {
-	Enabled bool     `json:"enabled"`
-	Config  []string `json:"config,omitempty"`
+	Enabled         bool     `json:"enabled"`
+	Config          []string `json:"config,omitempty"`
+	QueryServerName string   `json:"query_server_name,omitempty"`
 }
 
 type SingboxTransport struct {
@@ -292,10 +293,13 @@ func buildSingboxTLS(p *model.ProfileItem) *SingboxTLS {
 	}
 
 	// ECH
-	if p.EchConfigList != "" {
+	if p.EchConfigList != "" || p.EchQueryServerName != "" {
 		tls.ECH = &SingboxECH{
-			Enabled: true,
-			Config:  []string{p.EchConfigList},
+			Enabled:         true,
+			QueryServerName: p.EchQueryServerName,
+		}
+		if p.EchConfigList != "" {
+			tls.ECH.Config = []string{p.EchConfigList}
 		}
 	}
 

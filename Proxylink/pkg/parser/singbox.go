@@ -194,6 +194,9 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 		if ob.TLS.ECH != nil && ob.TLS.ECH.Enabled && len(ob.TLS.ECH.Config) > 0 {
 			p.EchConfigList = ob.TLS.ECH.Config[0]
 		}
+		if ob.TLS.ECH != nil && ob.TLS.ECH.Enabled {
+			p.EchQueryServerName = ob.TLS.ECH.QueryServerName
+		}
 	}
 
 	// Trojan 默认 TLS
