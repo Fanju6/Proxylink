@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -388,12 +389,14 @@ func formatProfiles(profiles []*model.ProfileItem) (string, error) {
 }
 
 func toJSON(data interface{}) (string, error) {
-	var jsonBytes []byte
-	var err error
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
 	if *prettyPrint {
-		jsonBytes, err = json.MarshalIndent(data, "", "  ")
-	} else {
-		jsonBytes, err = json.Marshal(data)
+		encoder.SetIndent("", "  ")
 	}
-	return string(jsonBytes), err
+	if err := encoder.Encode(data); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }

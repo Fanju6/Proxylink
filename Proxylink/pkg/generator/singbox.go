@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"bytes"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -103,11 +104,7 @@ func GenerateSingboxOutbound(p *model.ProfileItem) (string, error) {
 	}
 
 	config := &SingboxConfig{Outbounds: []*SingboxOutbound{ob}}
-	bytes, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(bytes), nil
+	return marshalSingboxJSON(config)
 }
 
 // GenerateSingboxOutbounds 从多个 ProfileItem 生成 sing-box 配置 JSON
@@ -124,11 +121,18 @@ func GenerateSingboxOutbounds(profiles []*model.ProfileItem) (string, error) {
 	}
 
 	config := &SingboxConfig{Outbounds: outbounds}
-	bytes, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
+	return marshalSingboxJSON(config)
+}
+
+func marshalSingboxJSON(v any) (string, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(v); err != nil {
 		return "", err
 	}
-	return string(bytes), nil
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }
 
 func nextSingboxTag(tag string, index int, usedTags map[string]int) string {
