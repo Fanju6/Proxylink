@@ -32,6 +32,10 @@ type ClashProxy struct {
 	// Shadowsocks / Trojan / Hysteria2
 	Password string `yaml:"password"`
 
+	// Shadowsocks Plugin
+	Plugin     string            `yaml:"plugin"`
+	PluginOpts map[string]string `yaml:"plugin-opts"`
+
 	// 传输层
 	Network string `yaml:"network"`
 
@@ -175,6 +179,16 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 	case model.SHADOWSOCKS:
 		p.Password = cp.Password
 		p.Method = cp.Cipher
+		if cp.Plugin != "" {
+			p.Plugin = cp.Plugin
+			if cp.PluginOpts != nil {
+				var opts []string
+				for k, v := range cp.PluginOpts {
+					opts = append(opts, fmt.Sprintf("%s=%s", k, v))
+				}
+				p.PluginOpts = strings.Join(opts, ";")
+			}
+		}
 	case model.TROJAN:
 		p.Password = cp.Password
 	case model.HYSTERIA2:
