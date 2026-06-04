@@ -284,13 +284,11 @@ func buildSingboxTLS(p *model.ProfileItem) *SingboxTLS {
 	}
 
 	// uTLS fingerprint
-	fingerprint := p.Fingerprint
-	if fingerprint == "" {
-		fingerprint = "chrome"
-	}
-	tls.UTLS = &SingboxUTLS{
-		Enabled:     true,
-		Fingerprint: fingerprint,
+	if p.Fingerprint != "" {
+		tls.UTLS = &SingboxUTLS{
+			Enabled:     true,
+			Fingerprint: p.Fingerprint,
+		}
 	}
 
 	// Reality
