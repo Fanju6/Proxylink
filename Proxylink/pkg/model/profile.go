@@ -32,9 +32,11 @@ type ProfileItem struct {
 	Mode         string `json:"mode,omitempty"`         // gRPC 模式
 	ServiceName  string `json:"serviceName,omitempty"`  // gRPC serviceName
 	Authority    string `json:"authority,omitempty"`    // gRPC authority
-	XhttpMode    string `json:"xhttpMode,omitempty"`    // XHTTP 模式
-	XhttpExtra   string `json:"xhttpExtra,omitempty"`   // XHTTP 额外配置
-	FinalMask    string `json:"finalMask,omitempty"`    // finalmask JSON (fm 参数)
+	XhttpMode          string `json:"xhttpMode,omitempty"`          // XHTTP 模式
+	XhttpExtra         string `json:"xhttpExtra,omitempty"`         // XHTTP 额外配置
+	FinalMask          string `json:"finalMask,omitempty"`          // finalmask JSON (fm 参数)
+	MaxEarlyData       int    `json:"maxEarlyData,omitempty"`       // WebSocket 0-RTT 早期数据大小
+	EarlyDataHeaderName string `json:"earlyDataHeaderName,omitempty"` // 早期数据头名称 (Xray 兼容: Sec-WebSocket-Protocol)
 
 	// TLS 配置
 	Security      string `json:"security,omitempty"`      // tls/reality/none

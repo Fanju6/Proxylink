@@ -162,6 +162,10 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 					p.Host = host
 				}
 			}
+			if ob.Transport.MaxEarlyData > 0 {
+				p.MaxEarlyData = ob.Transport.MaxEarlyData
+				p.EarlyDataHeaderName = ob.Transport.EarlyDataHeaderName
+			}
 		case "grpc":
 			p.ServiceName = ob.Transport.ServiceName
 		case "h2", "http":

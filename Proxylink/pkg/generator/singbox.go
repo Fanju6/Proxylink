@@ -84,11 +84,13 @@ type SingboxECH struct {
 }
 
 type SingboxTransport struct {
-	Type        string            `json:"type"`
-	Path        string            `json:"path,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Host        []string          `json:"host,omitempty"`
-	ServiceName string            `json:"service_name,omitempty"`
+	Type                string            `json:"type"`
+	Path                string            `json:"path,omitempty"`
+	Headers             map[string]string `json:"headers,omitempty"`
+	Host                []string          `json:"host,omitempty"`
+	ServiceName         string            `json:"service_name,omitempty"`
+	MaxEarlyData        int               `json:"max_early_data,omitempty"`
+	EarlyDataHeaderName string            `json:"early_data_header_name,omitempty"`
 }
 
 type SingboxHy2Obfs struct {
@@ -234,6 +236,10 @@ func buildSingboxTransport(p *model.ProfileItem) *SingboxTransport {
 		}
 		if p.Host != "" {
 			t.Headers = map[string]string{"Host": p.Host}
+		}
+		if p.MaxEarlyData > 0 {
+			t.MaxEarlyData = p.MaxEarlyData
+			t.EarlyDataHeaderName = p.EarlyDataHeaderName
 		}
 	case "grpc":
 		t.Type = "grpc"

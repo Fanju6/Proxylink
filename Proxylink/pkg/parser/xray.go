@@ -160,7 +160,7 @@ func parseStreamSettings(ss *generator.StreamSettings, p *model.ProfileItem) {
 		}
 	case "ws":
 		if ss.WsSettings != nil {
-			p.Path = ss.WsSettings.Path
+			p.Path, p.MaxEarlyData, p.EarlyDataHeaderName = parsePathEarlyData(ss.WsSettings.Path)
 			if ss.WsSettings.Headers != nil {
 				p.Host = ss.WsSettings.Headers.Host
 			}

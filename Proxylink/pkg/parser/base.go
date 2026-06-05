@@ -2,6 +2,7 @@ package parser
 
 import (
 	"net/url"
+	"strconv"
 	"strings"
 
 	"proxylink/pkg/model"
@@ -18,7 +19,8 @@ func parseQueryParams(config *model.ProfileItem, query url.Values) {
 
 	config.HeaderType = query.Get("headerType")
 	config.Host = query.Get("host")
-	config.Path = query.Get("path")
+	rawPath := query.Get("path")
+	config.Path, config.MaxEarlyData, config.EarlyDataHeaderName = parsePathEarlyData(rawPath)
 	config.Seed = query.Get("seed")
 	config.QuicSecurity = query.Get("quicSecurity")
 	config.QuicKey = query.Get("key")
@@ -144,8 +146,8 @@ func buildQueryParams(config *model.ProfileItem) url.Values {
 		if config.Host != "" {
 			query.Set("host", config.Host)
 		}
-		if config.Path != "" {
-			query.Set("path", config.Path)
+		if config.Path != "" || config.MaxEarlyData > 0 {
+			query.Set("path", buildPathWithEarlyData(config.Path, config.MaxEarlyData))
 		}
 	case "http", "h2":
 		query.Set("type", "http")
@@ -239,4 +241,34 @@ func looksLikeECHConfig(ech string) bool {
 	return strings.Contains(ech, "-----BEGIN") ||
 		strings.Contains(ech, "ECH CONFIG") ||
 		strings.Contains(ech, "\n")
+}
+
+// parsePathEarlyData 从路径中提取 ?ed=N 参数
+// 例如 "/nfcivic?ed=2560" -> path="/nfcivic", maxEarlyData=2560, headerName="Sec-WebSocket-Protocol"
+func parsePathEarlyData(rawPath string) (path string, maxEarlyData int, earlyDataHeaderName string) {
+	if idx := strings.Index(rawPath, "?ed="); idx != -1 {
+		path = rawPath[:idx]
+		edStr := rawPath[idx+4:]
+		// ed 值后面可能还有其他参数 (&...)
+		if ampIdx := strings.Index(edStr, "&"); ampIdx != -1 {
+			edStr = edStr[:ampIdx]
+		}
+		if v, err := strconv.Atoi(edStr); err == nil && v > 0 {
+			maxEarlyData = v
+			earlyDataHeaderName = "Sec-WebSocket-Protocol"
+		}
+		return
+	}
+	return rawPath, 0, ""
+}
+
+// buildPathWithEarlyData 将 path 和 maxEarlyData 合并为 path?ed=N 格式
+func buildPathWithEarlyData(path string, maxEarlyData int) string {
+	if maxEarlyData > 0 {
+		if path == "" {
+			path = "/"
+		}
+		return path + "?ed=" + strconv.Itoa(maxEarlyData)
+	}
+	return path
 }

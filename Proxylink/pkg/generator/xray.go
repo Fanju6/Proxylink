@@ -610,8 +610,15 @@ func populateTransportSettings(ss *StreamSettings, p *model.ProfileItem) string 
 		ss.Finalmask = &FinalMaskBean{Udp: udpMaskList}
 
 	case "ws":
+		wsPath := p.Path
+		if p.MaxEarlyData > 0 {
+			if wsPath == "" {
+				wsPath = "/"
+			}
+			wsPath = wsPath + "?ed=" + strconv.Itoa(p.MaxEarlyData)
+		}
 		wsSetting := &WsSettingsBean{
-			Path: p.Path,
+			Path: wsPath,
 		}
 		if wsSetting.Path == "" {
 			wsSetting.Path = "/"
