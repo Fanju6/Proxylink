@@ -87,7 +87,7 @@ type SingboxTransport struct {
 	Type        string            `json:"type"`
 	Path        string            `json:"path,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty"`
-	Host        []string          `json:"host,omitempty"`
+	Host        any               `json:"host,omitempty"`
 	ServiceName string            `json:"service_name,omitempty"`
 }
 
@@ -253,7 +253,7 @@ func buildSingboxTransport(p *model.ProfileItem) *SingboxTransport {
 			t.Path = "/"
 		}
 		if p.Host != "" {
-			t.Headers = map[string]string{"Host": p.Host}
+			t.Host = p.Host
 		}
 	default:
 		return nil

@@ -82,8 +82,9 @@ type ClashRealityOpts struct {
 }
 
 type ClashWsOpts struct {
-	Path    string            `yaml:"path"`
-	Headers map[string]string `yaml:"headers"`
+	Path             string            `yaml:"path"`
+	Headers          map[string]string `yaml:"headers"`
+	V2rayHTTPUpgrade bool              `yaml:"v2ray-http-upgrade"`
 }
 
 type ClashGrpcOpts struct {
@@ -268,6 +269,9 @@ func parseClashTransport(cp *ClashProxy, p *model.ProfileItem) {
 	switch p.Network {
 	case "ws":
 		if cp.WsOpts != nil {
+			if cp.WsOpts.V2rayHTTPUpgrade {
+				p.Network = "httpupgrade"
+			}
 			p.Path = cp.WsOpts.Path
 			if host, ok := cp.WsOpts.Headers["Host"]; ok {
 				p.Host = host

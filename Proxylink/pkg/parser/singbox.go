@@ -154,8 +154,17 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 		}
 
 		switch p.Network {
-		case "ws", "httpupgrade":
+		case "ws":
 			if ob.Transport.Headers != nil {
+				if host, ok := ob.Transport.Headers["Host"]; ok {
+					p.Host = host
+				} else if host, ok := ob.Transport.Headers["host"]; ok {
+					p.Host = host
+				}
+			}
+		case "httpupgrade":
+			p.Host = singboxTransportHostString(ob.Transport.Host)
+			if p.Host == "" && ob.Transport.Headers != nil {
 				if host, ok := ob.Transport.Headers["Host"]; ok {
 					p.Host = host
 				} else if host, ok := ob.Transport.Headers["host"]; ok {
@@ -165,9 +174,7 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 		case "grpc":
 			p.ServiceName = ob.Transport.ServiceName
 		case "h2", "http":
-			if len(ob.Transport.Host) > 0 {
-				p.Host = strings.Join(ob.Transport.Host, ",")
-			}
+			p.Host = singboxTransportHostString(ob.Transport.Host)
 		}
 	}
 
@@ -216,4 +223,23 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 	}
 
 	return p
+}
+
+func singboxTransportHostString(host any) string {
+	switch value := host.(type) {
+	case string:
+		return value
+	case []string:
+		return strings.Join(value, ",")
+	case []any:
+		hosts := make([]string, 0, len(value))
+		for _, item := range value {
+			if host, ok := item.(string); ok && host != "" {
+				hosts = append(hosts, host)
+			}
+		}
+		return strings.Join(hosts, ",")
+	default:
+		return ""
+	}
 }
