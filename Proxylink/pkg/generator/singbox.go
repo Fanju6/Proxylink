@@ -284,6 +284,14 @@ func buildSingboxTLS(p *model.ProfileItem) *SingboxTLS {
 	tls.Insecure = p.Insecure
 	tls.DisableSNI = p.DisableSNI
 
+	// pinSHA256 (Hysteria2/Xray) 钉扎的是【整个证书】的 SHA256 指纹,
+	// 而 sing-box 只有 certificate_public_key_sha256 (钉扎【公钥】SPKI 哈希),
+	// 两者哈希对象不同无法换算, sing-box 也没有整证书指纹钉扎选项。
+	// 故降级为跳过证书验证 (等价于 Clash 订阅的 skip-cert-verify)。
+	if p.PinSHA256 != "" {
+		tls.Insecure = true
+	}
+
 	// ALPN
 	if p.ALPN != "" {
 		tls.ALPN = splitAndTrim(p.ALPN, ",")
