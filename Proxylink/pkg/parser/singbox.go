@@ -154,7 +154,7 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 		}
 
 		switch p.Network {
-		case "ws", "httpupgrade":
+		case "ws":
 			if ob.Transport.Headers != nil {
 				if host, ok := ob.Transport.Headers["Host"]; ok {
 					p.Host = host
@@ -166,11 +166,23 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 				p.MaxEarlyData = ob.Transport.MaxEarlyData
 				p.EarlyDataHeaderName = ob.Transport.EarlyDataHeaderName
 			}
+		case "httpupgrade":
+			if host, ok := ob.Transport.Host.(string); ok && host != "" {
+				p.Host = host
+			} else if ob.Transport.Headers != nil {
+				if host, ok := ob.Transport.Headers["Host"]; ok {
+					p.Host = host
+				} else if host, ok := ob.Transport.Headers["host"]; ok {
+					p.Host = host
+				}
+			}
 		case "grpc":
 			p.ServiceName = ob.Transport.ServiceName
 		case "h2", "http":
-			if len(ob.Transport.Host) > 0 {
-				p.Host = strings.Join(ob.Transport.Host, ",")
+			if hosts, ok := ob.Transport.Host.([]string); ok && len(hosts) > 0 {
+				p.Host = strings.Join(hosts, ",")
+			} else if host, ok := ob.Transport.Host.(string); ok && host != "" {
+				p.Host = host
 			}
 		}
 	}
