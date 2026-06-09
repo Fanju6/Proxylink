@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"proxylink/pkg/encoder"
@@ -238,6 +239,10 @@ func writeMultipleFiles(profiles []*model.ProfileItem) error {
 
 	ext := getFileExtension()
 	usedNames := make(map[string]int) // 跟踪已使用的文件名，避免重名覆盖
+	orderWidth := len(strconv.Itoa(len(profiles)))
+	if orderWidth < 4 {
+		orderWidth = 4
+	}
 
 	for i, profile := range profiles {
 		// 生成文件名
@@ -272,6 +277,7 @@ func writeMultipleFiles(profiles []*model.ProfileItem) error {
 		}
 
 		filename = filename + ext
+		filename = fmt.Sprintf("%0*d_%s", orderWidth, i+1, filename)
 
 		filepath := filepath.Join(*outputDir, filename)
 		if err := os.WriteFile(filepath, []byte(output), 0644); err != nil {
