@@ -93,13 +93,40 @@ func ParseVMess(uri string) (*model.ProfileItem, error) {
 
 // parseVMessJSON 解析 JSON 格式的 VMess
 func parseVMessJSON(jsonStr string) (*model.ProfileItem, error) {
-	config := model.NewProfileItem(model.VMESS)
-
 	var qr VmessQRCode
 	if err := json.Unmarshal([]byte(jsonStr), &qr); err != nil {
 		// 回退到手动解析
 		return parseVMessJSONManual(jsonStr)
 	}
+	return profileFromVMessQR(&qr), nil
+}
+
+// parseVMessJSONManual 手动解析 VMess JSON (兼容非标准 JSON)
+func parseVMessJSONManual(jsonStr string) (*model.ProfileItem, error) {
+	qr := VmessQRCode{
+		Ps:       extractJSONField(jsonStr, "ps"),
+		Add:      extractJSONField(jsonStr, "add"),
+		Port:     extractJSONField(jsonStr, "port"),
+		ID:       extractJSONField(jsonStr, "id"),
+		Aid:      extractJSONField(jsonStr, "aid"),
+		Scy:      extractJSONField(jsonStr, "scy"),
+		Net:      extractJSONField(jsonStr, "net"),
+		Type:     extractJSONField(jsonStr, "type"),
+		Host:     extractJSONField(jsonStr, "host"),
+		Path:     extractJSONField(jsonStr, "path"),
+		TLS:      extractJSONField(jsonStr, "tls"),
+		SNI:      extractJSONField(jsonStr, "sni"),
+		Alpn:     extractJSONField(jsonStr, "alpn"),
+		Fp:       extractJSONField(jsonStr, "fp"),
+		Insecure: extractJSONField(jsonStr, "insecure"),
+	}
+	return profileFromVMessQR(&qr), nil
+}
+
+// profileFromVMessQR 将 VmessQRCode 转为 ProfileItem
+// 传输层与 TLS 部分复用 parseQueryParams 公共逻辑, 避免与其它协议的解析逻辑漂移
+func profileFromVMessQR(qr *VmessQRCode) *model.ProfileItem {
+	config := model.NewProfileItem(model.VMESS)
 
 	config.Server = qr.Add
 	config.ServerPort = qr.Port
@@ -109,7 +136,7 @@ func parseVMessJSON(jsonStr string) (*model.ProfileItem, error) {
 		config.Remarks = "none"
 	}
 
-	// 安全类型
+	// 安全类型 (vmess 特有字段 scy)
 	config.Method = qr.Scy
 	if config.Method == "" {
 		config.Method = "auto"
@@ -122,73 +149,45 @@ func parseVMessJSON(jsonStr string) (*model.ProfileItem, error) {
 		}
 	}
 
-	// 网络类型
-	config.Network = qr.Net
-	if config.Network == "" {
-		config.Network = "tcp"
-	}
-	config.HeaderType = qr.Type
-	config.Host = qr.Host
-	// 拆分 path 中的 ?ed=N 早期数据参数, 转为独立字段
-	config.Path, config.MaxEarlyData, config.EarlyDataHeaderName = parsePathEarlyData(qr.Path)
+	// 传输层 + TLS 走公共解析逻辑
+	parseQueryParams(config, vmessJSONToQuery(qr))
 
-	// 特殊网络类型处理
-	switch config.Network {
-	case "kcp":
-		config.Seed = qr.Path
-	case "grpc":
-		config.Mode = qr.Type
-		config.ServiceName = qr.Path
-		config.Authority = qr.Host
-	}
-
-	// TLS
-	if qr.TLS == "tls" {
-		config.Security = "tls"
-	}
-	config.SNI = qr.SNI
-	config.Fingerprint = qr.Fp
-	config.ALPN = qr.Alpn
-	config.Insecure = qr.Insecure == "1"
-
-	return config, nil
+	return config
 }
 
-// parseVMessJSONManual 手动解析 VMess JSON (兼容格式)
-func parseVMessJSONManual(jsonStr string) (*model.ProfileItem, error) {
-	config := model.NewProfileItem(model.VMESS)
+// vmessJSONToQuery 将 VmessQRCode 字段映射为标准查询参数,
+// 以便复用 parseQueryParams。vmess JSON 对 kcp/grpc 复用了 type/path/host 字段, 需按 net 还原语义。
+func vmessJSONToQuery(qr *VmessQRCode) url.Values {
+	q := url.Values{}
 
-	config.Server = extractJSONField(jsonStr, "add")
-	config.ServerPort = extractJSONField(jsonStr, "port")
-	config.Password = extractJSONField(jsonStr, "id")
-	config.Remarks = util.URLDecode(extractJSONField(jsonStr, "ps"))
-	if config.Remarks == "" {
-		config.Remarks = "none"
+	net := qr.Net
+	if net == "" {
+		net = "tcp"
+	}
+	q.Set("type", net)
+
+	switch net {
+	case "kcp":
+		q.Set("headerType", qr.Type)
+		q.Set("seed", qr.Path)
+	case "grpc":
+		q.Set("mode", qr.Type)
+		q.Set("serviceName", qr.Path)
+		q.Set("authority", qr.Host)
+	default:
+		q.Set("headerType", qr.Type)
+		q.Set("host", qr.Host)
+		q.Set("path", qr.Path) // ?ed=N 由 parseQueryParams 统一拆分
 	}
 
-	config.Method = extractJSONField(jsonStr, "scy")
-	if config.Method == "" {
-		config.Method = "auto"
-	}
+	// TLS (parseQueryParams 只接受 tls/reality, 其余值会被忽略)
+	q.Set("security", qr.TLS)
+	q.Set("sni", qr.SNI)
+	q.Set("alpn", qr.Alpn)
+	q.Set("fp", qr.Fp)
+	q.Set("insecure", qr.Insecure)
 
-	config.Network = extractJSONField(jsonStr, "net")
-	if config.Network == "" {
-		config.Network = "tcp"
-	}
-	config.HeaderType = extractJSONField(jsonStr, "type")
-	config.Host = extractJSONField(jsonStr, "host")
-	// 拆分 path 中的 ?ed=N 早期数据参数, 转为独立字段
-	config.Path, config.MaxEarlyData, config.EarlyDataHeaderName = parsePathEarlyData(extractJSONField(jsonStr, "path"))
-
-	// TLS
-	if extractJSONField(jsonStr, "tls") == "tls" {
-		config.Security = "tls"
-	}
-	config.SNI = extractJSONField(jsonStr, "sni")
-	config.Fingerprint = extractJSONField(jsonStr, "fp")
-	config.ALPN = extractJSONField(jsonStr, "alpn")
-
-	return config, nil
+	return q
 }
 
 // parseVMessStd 解析类似 VLESS 格式的 VMess
