@@ -129,7 +129,8 @@ func parseVMessJSON(jsonStr string) (*model.ProfileItem, error) {
 	}
 	config.HeaderType = qr.Type
 	config.Host = qr.Host
-	config.Path = qr.Path
+	// 拆分 path 中的 ?ed=N 早期数据参数, 转为独立字段
+	config.Path, config.MaxEarlyData, config.EarlyDataHeaderName = parsePathEarlyData(qr.Path)
 
 	// 特殊网络类型处理
 	switch config.Network {
@@ -176,7 +177,8 @@ func parseVMessJSONManual(jsonStr string) (*model.ProfileItem, error) {
 	}
 	config.HeaderType = extractJSONField(jsonStr, "type")
 	config.Host = extractJSONField(jsonStr, "host")
-	config.Path = extractJSONField(jsonStr, "path")
+	// 拆分 path 中的 ?ed=N 早期数据参数, 转为独立字段
+	config.Path, config.MaxEarlyData, config.EarlyDataHeaderName = parsePathEarlyData(extractJSONField(jsonStr, "path"))
 
 	// TLS
 	if extractJSONField(jsonStr, "tls") == "tls" {
@@ -284,6 +286,9 @@ func ToVMessURI(config *model.ProfileItem) string {
 		qr.Type = config.Mode
 		qr.Path = config.ServiceName
 		qr.Host = config.Authority
+	case "ws", "httpupgrade":
+		// 还原 path 中的 ?ed=N 早期数据参数
+		qr.Path = buildPathWithEarlyData(config.Path, config.MaxEarlyData)
 	}
 
 	jsonBytes, _ := json.Marshal(qr)
