@@ -355,6 +355,8 @@ func buildSingboxHysteria2(ob *SingboxOutbound, p *model.ProfileItem) {
 }
 
 func normalizeHysteriaServerPorts(serverPorts string) []string {
+	// Clash 端口跳跃可用
+	serverPorts = strings.ReplaceAll(serverPorts, "/", ",")
 	ports := splitAndTrim(serverPorts, ",")
 	for i, port := range ports {
 		if strings.Count(port, "-") == 1 && !strings.Contains(port, ":") {

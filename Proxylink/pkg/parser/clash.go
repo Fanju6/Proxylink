@@ -82,9 +82,9 @@ type ClashRealityOpts struct {
 }
 
 type ClashWsOpts struct {
-	Path              string            `yaml:"path"`
-	Headers           map[string]string `yaml:"headers"`
-	V2rayHTTPUpgrade  bool              `yaml:"v2ray-http-upgrade"`
+	Path             string            `yaml:"path"`
+	Headers          map[string]string `yaml:"headers"`
+	V2rayHTTPUpgrade bool              `yaml:"v2ray-http-upgrade"`
 }
 
 type ClashGrpcOpts struct {
@@ -181,14 +181,8 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 		p.Password = cp.Password
 		p.Method = cp.Cipher
 		if cp.Plugin != "" {
-			p.Plugin = cp.Plugin
-			if cp.PluginOpts != nil {
-				var opts []string
-				for k, v := range cp.PluginOpts {
-					opts = append(opts, fmt.Sprintf("%s=%s", k, v))
-				}
-				p.PluginOpts = strings.Join(opts, ";")
-			}
+			p.Plugin = clashSSPluginName(cp.Plugin)
+			p.PluginOpts = clashSSPluginOpts(cp.Plugin, cp.PluginOpts)
 		}
 	case model.TROJAN:
 		p.Password = cp.Password
@@ -314,4 +308,43 @@ func parseClashTransport(cp *ClashProxy, p *model.ProfileItem) {
 			p.XhttpMode = cp.XhttpOpts.Mode
 		}
 	}
+}
+
+// clashSSPluginName 将 Clash 的 ss plugin 名转为 sing-box 名
+func clashSSPluginName(plugin string) string {
+	switch strings.ToLower(strings.TrimSpace(plugin)) {
+	case "obfs", "simple-obfs":
+		return "obfs-local"
+	default:
+		return plugin
+	}
+}
+
+// clashSSPluginOpts 将 Clash 的 plugin-opts map 转为 sing-box 分号分隔字符串
+func clashSSPluginOpts(plugin string, opts map[string]string) string {
+	if opts == nil {
+		return ""
+	}
+	var parts []string
+	switch strings.ToLower(strings.TrimSpace(plugin)) {
+	case "obfs", "simple-obfs":
+		if v := opts["mode"]; v != "" {
+			parts = append(parts, "obfs="+v)
+		}
+		if v := opts["host"]; v != "" {
+			parts = append(parts, "obfs-host="+v)
+		}
+	case "v2ray-plugin":
+		for _, k := range []string{"mode", "tls", "host", "path"} {
+			if v := opts[k]; v != "" {
+				parts = append(parts, k+"="+v)
+			}
+		}
+	default:
+		// 未知插件: 原样拼接 (键名不转换)
+		for k, v := range opts {
+			parts = append(parts, k+"="+v)
+		}
+	}
+	return strings.Join(parts, ";")
 }

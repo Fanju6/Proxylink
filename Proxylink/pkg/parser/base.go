@@ -38,6 +38,10 @@ func parseQueryParams(config *model.ProfileItem, query url.Values) {
 	}
 
 	config.SNI = query.Get("sni")
+	// sni 别名: peer (部分客户端用 peer 表示 SNI)
+	if config.SNI == "" {
+		config.SNI = query.Get("peer")
+	}
 	config.ALPN = query.Get("alpn")
 	config.Fingerprint = query.Get("fp")
 	config.Flow = query.Get("flow")
@@ -45,15 +49,8 @@ func parseQueryParams(config *model.ProfileItem, query url.Values) {
 	parseECHParam(config, query.Get("ech"))
 	config.PinnedCA256 = query.Get("pcs")
 
-	// Insecure - 支持多种参数名
-	insecure := query.Get("insecure")
-	if insecure == "" {
-		insecure = query.Get("allowInsecure")
-	}
-	if insecure == "" {
-		insecure = query.Get("allow_insecure")
-	}
-	config.Insecure = insecure == "1"
+	// Insecure - 支持多种参数名与取值 (1/true)
+	config.Insecure = queryBool(query, "insecure", "allowInsecure", "allow_insecure", "skip-cert-verify")
 
 	// Reality
 	config.PublicKey = query.Get("pbk")
