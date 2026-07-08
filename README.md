@@ -86,6 +86,14 @@ proxylink -xray config.json -format uri
 
 `-insecure` 和 `-dns` 只影响 `-sub` 订阅拉取过程，不改变本地链接解析结果。
 
+## 订阅解析说明
+
+订阅转换会先进入 sing-box provider-style 适配层：优先解析 sing-box JSON，然后依次处理 Clash YAML、SIP008 Shadowsocks JSON 和 Raw URI/Base64 订阅。sing-box JSON 解析使用公开 `github.com/sagernet/sing-box` 的 `option.Outbound` / `option.Endpoint` 类型和轻量 registry。
+
+未支持的 sing-box outbound、endpoint 或 Clash proxy 会被跳过并计入 `Failed`，错误会记录在 `ConvertResult.Errors`，不会中断同一订阅中的其他可用节点。当前可转换到内部模型的协议包括 VLESS、VMess、Shadowsocks、Trojan、Socks、HTTP、Hysteria2、AnyTLS、TUIC，以及单 peer WireGuard endpoint。
+
+Hysteria2 端口跳跃只接受合法范围，例如 `40000-50000` 或 `40000:50000`。单端口 `50000` 会保留为 `server_port`，不会写入 sing-box `server_ports`。
+
 ## 多文件输出
 
 使用 `-dir` 时，每个节点会单独写入一个文件。文件名来自节点名，并会清理不允许的字符。

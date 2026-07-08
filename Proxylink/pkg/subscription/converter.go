@@ -105,6 +105,10 @@ func (c *Converter) Convert(url string) (*ConvertResult, error) {
 
 // ConvertContent 转换订阅内容
 func (c *Converter) ConvertContent(content string) (*ConvertResult, error) {
+	if result, ok := convertContentWithSingboxProvider(content); ok {
+		return result, nil
+	}
+
 	// 自动检测 Clash YAML 格式
 	if parser.IsClashYAML(content) {
 		profiles, err := parser.ParseClashConfig([]byte(content))
