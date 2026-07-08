@@ -347,23 +347,52 @@ func buildSingboxHysteria2(ob *SingboxOutbound, p *model.ProfileItem) {
 
 	// 端口跳跃
 	if p.PortHopping != "" {
-		ob.ServerPorts = normalizeHysteriaServerPorts(p.PortHopping)
-		if p.PortHoppingInterval != "" {
-			ob.HopInterval = p.PortHoppingInterval + "s"
+		serverPorts := normalizeHysteriaServerPorts(p.PortHopping)
+		if len(serverPorts) > 0 {
+			ob.ServerPorts = serverPorts
+			if p.PortHoppingInterval != "" {
+				ob.HopInterval = p.PortHoppingInterval + "s"
+			}
 		}
 	}
 }
 
 func normalizeHysteriaServerPorts(serverPorts string) []string {
-	// Clash 端口跳跃可用
+	// Clash 端口跳跃可用 / 或 , 分隔多个范围。
 	serverPorts = strings.ReplaceAll(serverPorts, "/", ",")
 	ports := splitAndTrim(serverPorts, ",")
-	for i, port := range ports {
-		if strings.Count(port, "-") == 1 && !strings.Contains(port, ":") {
-			ports[i] = strings.Replace(port, "-", ":", 1)
+	ranges := make([]string, 0, len(ports))
+	for _, port := range ports {
+		normalized, ok := normalizeHysteriaPortRange(port)
+		if ok {
+			ranges = append(ranges, normalized)
 		}
 	}
-	return ports
+	return ranges
+}
+
+func normalizeHysteriaPortRange(portRange string) (string, bool) {
+	if strings.Count(portRange, "-") == 1 && !strings.Contains(portRange, ":") {
+		portRange = strings.Replace(portRange, "-", ":", 1)
+	}
+	if strings.Count(portRange, ":") != 1 {
+		return "", false
+	}
+
+	parts := strings.Split(portRange, ":")
+	start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return "", false
+	}
+	end, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return "", false
+	}
+	if start < 1 || start > 65535 || end < 1 || end > 65535 || start >= end {
+		return "", false
+	}
+
+	return strconv.Itoa(start) + ":" + strconv.Itoa(end), true
 }
 
 // parseMbps 解析带宽字符串为 Mbps 整型值
