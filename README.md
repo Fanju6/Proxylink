@@ -1,15 +1,15 @@
 # Proxylink
 
-Proxylink 是一个用 Go 编写的代理链接解析和配置转换工具。它可以解析常见代理 URI、订阅内容、Clash YAML 和 Xray JSON，并输出标准化的 ProfileItem、Xray 配置、sing-box 配置或代理链接。
+Proxylink 是一个用 Go 编写的代理链接解析和配置转换工具。它可以解析常见代理 URI、订阅内容、Clash YAML、Xray JSON 和 sing-box JSON，并输出标准化的 ProfileItem、Xray 配置、sing-box 配置或代理链接。
 
 ## 功能
 
-- 解析 VLESS、VMess、Shadowsocks、Trojan、Socks、HTTP、WireGuard、Hysteria2、AnyTLS、TUIC 节点
-- 支持从订阅 URL、文件、stdin、Clash YAML 和 Xray JSON 读取节点
+- 解析 VLESS、VMess、Shadowsocks、Trojan、SOCKS5、HTTP、WireGuard、Hysteria2、AnyTLS、TUIC 节点
+- 支持从订阅 URL、文件、stdin、Clash YAML、Xray JSON 和 sing-box JSON 读取节点
 - 支持输出 ProfileItem JSON、Xray 配置、sing-box 配置和 URI 链接
 - 支持多节点批量转换，以及按节点拆分为多个文件
 - 支持订阅请求跳过 TLS 证书验证和使用公共 DNS
-- 支持 Xray JSON 反向解析为 ProfileItem 或 URI
+- 支持 Xray JSON 和 sing-box JSON 反向解析为 ProfileItem 或 URI
 
 ## 构建
 
@@ -55,6 +55,9 @@ proxylink -sub "https://example.com/sub" -format singbox -o config.json
 
 # 从 Xray JSON 反向解析
 proxylink -xray config.json -format uri
+
+# 从 sing-box JSON 反向解析
+proxylink -singbox config.json -format uri
 ```
 
 ## 输出格式
@@ -73,6 +76,7 @@ proxylink -xray config.json -format uri
 | `-parse <uri>` | 解析单条代理链接 |
 | `-file <file>` | 从文件批量解析链接 |
 | `-xray <file>` | 从 Xray JSON 配置文件反向解析节点 |
+| `-singbox <file>` | 从 sing-box JSON 配置文件反向解析节点 |
 | `-sub <url>` | 从订阅 URL 拉取并解析节点 |
 | `-o <file>` | 输出到单个文件 |
 | `-dir <path>` | 将每个节点单独输出到指定目录 |
@@ -150,6 +154,7 @@ HK_3
 - VLESS
 - VMess
 - Shadowsocks
+- SOCKS5
 - Trojan
 - Hysteria2
 - AnyTLS
@@ -260,9 +265,11 @@ Proxylink/
 | VMess | `vmess://base64...` 或 `vmess://uuid@server:443?...` |
 | Shadowsocks | `ss://method:password@server:8388#name` |
 | Trojan | `trojan://password@server:443#name` |
-| Socks | `socks://user:pass@server:1080#name` |
+| SOCKS5 | `socks://user:pass@server:1080#name` 或 `socks5://Base64(user:pass)@server:1080#name` |
 | HTTP | `http://user:pass@server:8080#name` |
 | WireGuard | `wireguard://key@server:51820?...` 或 WireGuard `.conf` |
 | Hysteria2 | `hysteria2://auth@server:443?sni=example.com#name` |
 | AnyTLS | `anytls://password@server:443?sni=example.com#name` |
 | TUIC | `tuic://uuid:password@server:443?sni=example.com#name` |
+
+SOCKS5 URI 同时支持 `socks://` 和 `socks5://`。认证信息可使用明文 `user:pass`、Base64 编码的 `user:pass`，也兼容旧式 Base64 编码整个 `user:pass@server:port` 的链接；标准 Base64 与 URL-safe Base64 均可使用。转换为 sing-box 时会生成 `type: "socks"`、`version: "5"`，并保留 `username`、`password` 和网络范围。

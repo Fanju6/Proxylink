@@ -32,8 +32,10 @@ type SingboxOutbound struct {
 	Security string `json:"security,omitempty"`
 	AlterID  int    `json:"alter_id,omitempty"`
 
-	// Trojan / SS / Hysteria2
+	// Authentication
+	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+	Version  string `json:"version,omitempty"`
 
 	// Shadowsocks
 	Method     string `json:"method,omitempty"`
@@ -177,6 +179,12 @@ func buildSingboxOutbound(p *model.ProfileItem) *SingboxOutbound {
 		ob.Password = p.Password
 		ob.Plugin = p.Plugin
 		ob.PluginOpts = p.PluginOpts
+	case model.SOCKS:
+		ob.Type = "socks"
+		ob.Version = "5"
+		ob.Username = p.Username
+		ob.Password = p.Password
+		ob.Network = buildSingboxSOCKSNetwork(p)
 	case model.TROJAN:
 		ob.Type = "trojan"
 		ob.Password = p.Password
@@ -212,6 +220,15 @@ func buildSingboxOutbound(p *model.ProfileItem) *SingboxOutbound {
 	}
 
 	return ob
+}
+
+func buildSingboxSOCKSNetwork(p *model.ProfileItem) string {
+	switch p.Network {
+	case "tcp", "udp":
+		return p.Network
+	default:
+		return ""
+	}
 }
 
 func buildSingboxTUICNetwork(p *model.ProfileItem) string {

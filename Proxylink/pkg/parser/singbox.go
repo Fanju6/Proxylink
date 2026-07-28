@@ -68,6 +68,8 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 		configType = model.VMESS
 	case "shadowsocks", "ss":
 		configType = model.SHADOWSOCKS
+	case "socks":
+		configType = model.SOCKS
 	case "trojan":
 		configType = model.TROJAN
 	case "hysteria2", "hy2":
@@ -105,6 +107,9 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 		p.Password = ob.Password
 		p.Plugin = ob.Plugin
 		p.PluginOpts = ob.PluginOpts
+	case model.SOCKS:
+		p.Username = ob.Username
+		p.Password = ob.Password
 	case model.TROJAN:
 		p.Password = ob.Password
 	case model.HYSTERIA2:
@@ -141,6 +146,10 @@ func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
 
 	// 传输层
 	p.Network = "tcp"
+	if configType == model.SOCKS {
+		p.Network = ob.Network
+		p.UDP = ob.Network == "" || strings.Contains(ob.Network, "udp")
+	}
 	if configType == model.TUIC {
 		if ob.Network != "" {
 			p.Network = ob.Network

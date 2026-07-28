@@ -431,7 +431,7 @@ func isSupportedSingboxEndpointType(endpointType string) bool {
 
 func isSupportedClashProxyType(proxyType string) bool {
 	switch strings.ToLower(proxyType) {
-	case "vless", "vmess", "ss", "trojan", "hysteria2", "hy2", "anytls", "tuic":
+	case "vless", "vmess", "ss", "socks", "socks5", "trojan", "hysteria2", "hy2", "anytls", "tuic":
 		return true
 	default:
 		return false
@@ -441,6 +441,20 @@ func isSupportedClashProxyType(proxyType string) bool {
 func applySingboxNetwork(p *model.ProfileItem, network sboption.NetworkList) {
 	networks := network.Build()
 	if len(networks) == 0 {
+		return
+	}
+	if p.ConfigType == model.SOCKS {
+		hasTCP := containsString(networks, "tcp")
+		hasUDP := containsString(networks, "udp")
+		p.UDP = hasUDP
+		switch {
+		case hasTCP && hasUDP:
+			p.Network = ""
+		case hasTCP:
+			p.Network = "tcp"
+		case hasUDP:
+			p.Network = "udp"
+		}
 		return
 	}
 	if containsString(networks, "udp") {

@@ -23,7 +23,7 @@ func Parse(uri string) (*model.ProfileItem, error) {
 		return ParseShadowsocks(uri)
 	case strings.HasPrefix(uri, "trojan://"):
 		return ParseTrojan(uri)
-	case strings.HasPrefix(uri, "socks://"):
+	case strings.HasPrefix(uri, "socks://"), strings.HasPrefix(uri, "socks5://"):
 		return ParseSocks(uri)
 	case strings.HasPrefix(uri, "http://"):
 		return ParseHTTP(uri)

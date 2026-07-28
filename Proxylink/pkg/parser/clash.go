@@ -29,7 +29,8 @@ type ClashProxy struct {
 	Cipher  string `yaml:"cipher"`
 	Flow    string `yaml:"flow"`
 
-	// Shadowsocks / Trojan / Hysteria2
+	// Authentication
+	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 
 	// Shadowsocks Plugin
@@ -146,6 +147,8 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 		configType = model.VMESS
 	case "ss":
 		configType = model.SHADOWSOCKS
+	case "socks", "socks5":
+		configType = model.SOCKS
 	case "trojan":
 		configType = model.TROJAN
 	case "hysteria2", "hy2":
@@ -184,6 +187,9 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 			p.Plugin = clashSSPluginName(cp.Plugin)
 			p.PluginOpts = clashSSPluginOpts(cp.Plugin, cp.PluginOpts)
 		}
+	case model.SOCKS:
+		p.Username = cp.Username
+		p.Password = cp.Password
 	case model.TROJAN:
 		p.Password = cp.Password
 	case model.HYSTERIA2:
@@ -213,7 +219,7 @@ func fromClashProxy(cp *ClashProxy) *model.ProfileItem {
 
 	// 传输层
 	p.Network = cp.Network
-	if p.Network == "" {
+	if p.Network == "" && !(configType == model.SOCKS && cp.UDP) {
 		p.Network = "tcp"
 	}
 
