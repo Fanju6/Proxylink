@@ -10,6 +10,9 @@ type ProfileItem struct {
 	Server         string     `json:"server"`
 	ServerPort     string     `json:"serverPort"`
 
+	// 原生 sing-box 输入对应的官方出站；仅用于无损生成 sing-box，不进入 Profile JSON。
+	OfficialSingboxOutbound *OfficialSingboxOutbound `json:"-"`
+
 	// 认证信息
 	Password   string `json:"password,omitempty"`   // UUID (VLESS/VMess) / 密码 (SS/Trojan/Hysteria2/AnyTLS/TUIC)
 	Method     string `json:"method,omitempty"`     // 加密方法 (SS) / encryption (VLESS) / scy (VMess)

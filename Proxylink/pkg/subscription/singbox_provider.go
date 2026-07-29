@@ -39,6 +39,24 @@ type sip008Document struct {
 	Servers []sip008Server `json:"servers"`
 }
 
+func (singboxOutboundOptionsRegistry) OptionTypes() []string {
+	return []string{
+		C.TypeVLESS,
+		C.TypeVMess,
+		C.TypeShadowsocks,
+		C.TypeTrojan,
+		C.TypeSOCKS,
+		C.TypeHTTP,
+		C.TypeHysteria2,
+		C.TypeAnyTLS,
+		C.TypeTUIC,
+	}
+}
+
+func (singboxEndpointOptionsRegistry) OptionTypes() []string {
+	return []string{C.TypeWireGuard, C.TypeTailscale}
+}
+
 type sip008Server struct {
 	Remarks    string `json:"remarks"`
 	Server     string `json:"server"`

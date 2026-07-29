@@ -1,244 +1,439 @@
 package parser
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"proxylink/pkg/generator"
+	"github.com/sagernet/sing-box/option"
+	singJSON "github.com/sagernet/sing/common/json"
+
 	"proxylink/pkg/model"
 )
 
-// ParseSingboxConfig 解析 sing-box 的 JSON 配置文件或单个出站配置
-func ParseSingboxConfig(data []byte) ([]*model.ProfileItem, error) {
-	// 尝试解析为完整的配置对象 (包含 outbounds 数组)
-	var config generator.SingboxConfig
-	err := json.Unmarshal(data, &config)
-	if err == nil && len(config.Outbounds) > 0 {
-		return parseOutbounds(config.Outbounds)
-	}
-
-	// 尝试解析为包含多个 outbound 的数组
-	var outbounds []*generator.SingboxOutbound
-	err = json.Unmarshal(data, &outbounds)
-	if err == nil && len(outbounds) > 0 {
-		return parseOutbounds(outbounds)
-	}
-
-	// 尝试解析为单个 outbound 对象
-	var outbound generator.SingboxOutbound
-	err = json.Unmarshal(data, &outbound)
-	if err == nil && outbound.Type != "" && outbound.Server != "" {
-		if p := fromSingboxOutbound(&outbound); p != nil {
-			return []*model.ProfileItem{p}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("无法解析为有效的 sing-box 节点配置格式")
+var skippedSingboxOutboundTypes = map[string]struct{}{
+	"selector": {},
+	"urltest":  {},
+	"direct":   {},
+	"block":    {},
+	"dns":      {},
 }
 
-func parseOutbounds(outbounds []*generator.SingboxOutbound) ([]*model.ProfileItem, error) {
-	var profiles []*model.ProfileItem
-	for _, outbound := range outbounds {
-		// 跳过直连或阻断等非代理出站
-		if outbound.Type == "direct" || outbound.Type == "block" || outbound.Type == "dns" {
+// SingboxParseStats 记录 sing-box 配置逐出站解析结果。
+type SingboxParseStats struct {
+	Total         int
+	Success       int
+	Failed        int
+	Skipped       int
+	Compatible    int
+	SkippedByType map[string]int
+}
+
+// SingboxOutboundError 描述单个出站的解析错误，不包含敏感配置内容。
+type SingboxOutboundError struct {
+	Index int
+	Tag   string
+	Type  string
+	Err   error
+}
+
+func (e SingboxOutboundError) Error() string {
+	return fmt.Sprintf("outbounds[%d] tag=%q type=%q: %v", e.Index, e.Tag, e.Type, e.Err)
+}
+
+func (e SingboxOutboundError) Unwrap() error {
+	return e.Err
+}
+
+// SingboxCompatibilityEvent 记录不含凭据的旧格式转换事件。
+type SingboxCompatibilityEvent struct {
+	Index int
+	Tag   string
+	Type  string
+	Rule  string
+}
+
+// SingboxParseResult 保存成功节点、统计、兼容事件和局部错误。
+type SingboxParseResult struct {
+	Profiles            []*model.ProfileItem
+	Stats               SingboxParseStats
+	Errors              []SingboxOutboundError
+	CompatibilityEvents []SingboxCompatibilityEvent
+}
+
+type singboxOutboundHeader struct {
+	Type string `json:"type"`
+	Tag  string `json:"tag,omitempty"`
+}
+
+// IsSingboxSubscription 判断内容是否为官方完整配置形态。
+func IsSingboxSubscription(data []byte) bool {
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(data, &document); err != nil {
+		return false
+	}
+	outbounds, exists := document["outbounds"]
+	if !exists {
+		return false
+	}
+	outbounds = bytes.TrimSpace(outbounds)
+	if len(outbounds) == 0 || outbounds[0] != '[' {
+		return false
+	}
+	var values []json.RawMessage
+	return json.Unmarshal(outbounds, &values) == nil
+}
+
+// ParseSingboxConfig 兼容原接口，返回成功解析的 ProfileItem。
+func ParseSingboxConfig(data []byte) ([]*model.ProfileItem, error) {
+	result, err := ParseSingboxDetailed(data)
+	if err != nil {
+		return nil, err
+	}
+	return result.Profiles, nil
+}
+
+// ParseSingboxDetailed 解析完整配置、出站数组或单个出站对象。
+func ParseSingboxDetailed(data []byte) (*SingboxParseResult, error) {
+	outbounds, err := decodeSingboxOutbounds(data)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &SingboxParseResult{Stats: SingboxParseStats{
+		Total:         len(outbounds),
+		SkippedByType: make(map[string]int),
+	}}
+	for index, raw := range outbounds {
+		var header singboxOutboundHeader
+		if err := json.Unmarshal(raw, &header); err != nil {
+			result.Stats.Failed++
+			result.Errors = append(result.Errors, SingboxOutboundError{Index: index, Err: err})
+			continue
+		}
+		header.Type = canonicalSingboxOutboundType(header.Type)
+		if header.Type == "" {
+			result.Stats.Failed++
+			result.Errors = append(result.Errors, SingboxOutboundError{
+				Index: index,
+				Tag:   header.Tag,
+				Err:   fmt.Errorf("缺少出站类型"),
+			})
 			continue
 		}
 
-		if p := fromSingboxOutbound(outbound); p != nil {
-			profiles = append(profiles, p)
+		if _, skipped := skippedSingboxOutboundTypes[header.Type]; skipped {
+			result.Stats.Skipped++
+			result.Stats.SkippedByType[header.Type]++
+			continue
+		}
+		if _, supported := newOfficialOptions(header.Type); !supported {
+			result.Stats.Skipped++
+			result.Stats.SkippedByType[header.Type]++
+			continue
+		}
+
+		outbound, compatible, err := parseOfficialOutbound(context.Background(), raw, header)
+		if err != nil {
+			result.Stats.Failed++
+			result.Errors = append(result.Errors, SingboxOutboundError{
+				Index: index,
+				Tag:   header.Tag,
+				Type:  header.Type,
+				Err:   err,
+			})
+			continue
+		}
+		profile := fromOfficialSingboxOutbound(outbound)
+		if profile == nil {
+			result.Stats.Failed++
+			result.Errors = append(result.Errors, SingboxOutboundError{
+				Index: index,
+				Tag:   header.Tag,
+				Type:  header.Type,
+				Err:   fmt.Errorf("无法映射官方出站类型"),
+			})
+			continue
+		}
+		result.Profiles = append(result.Profiles, profile)
+		result.Stats.Success++
+		if compatible {
+			result.Stats.Compatible++
+			result.CompatibilityEvents = append(result.CompatibilityEvents, SingboxCompatibilityEvent{
+				Index: index,
+				Tag:   header.Tag,
+				Type:  header.Type,
+				Rule:  legacyEmptyTransportArrayRule,
+			})
 		}
 	}
 
-	if len(profiles) == 0 {
-		return nil, fmt.Errorf("未找到支持的代理出站配置")
+	if result.Stats.Success == 0 {
+		if len(result.Errors) > 0 {
+			return nil, fmt.Errorf("未找到可用的 sing-box 代理出站: %w", result.Errors[0])
+		}
+		return nil, fmt.Errorf("未找到可用的 sing-box 代理出站")
 	}
-
-	return profiles, nil
+	return result, nil
 }
 
-// fromSingboxOutbound 将 sing-box 的 outbound 转换为 ProfileItem
-func fromSingboxOutbound(ob *generator.SingboxOutbound) *model.ProfileItem {
-	var configType model.ConfigType
-	switch strings.ToLower(ob.Type) {
-	case "vless":
-		configType = model.VLESS
-	case "vmess":
-		configType = model.VMESS
-	case "shadowsocks", "ss":
-		configType = model.SHADOWSOCKS
-	case "socks":
-		configType = model.SOCKS
-	case "trojan":
-		configType = model.TROJAN
-	case "hysteria2", "hy2":
-		configType = model.HYSTERIA2
-	case "anytls":
-		configType = model.ANYTLS
-	case "tuic":
-		configType = model.TUIC
+func decodeSingboxOutbounds(data []byte) ([]json.RawMessage, error) {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return nil, fmt.Errorf("sing-box 配置为空")
+	}
+
+	switch trimmed[0] {
+	case '[':
+		var outbounds []json.RawMessage
+		if err := json.Unmarshal([]byte(trimmed), &outbounds); err != nil {
+			return nil, fmt.Errorf("解析 sing-box 出站数组失败: %w", err)
+		}
+		return outbounds, nil
+	case '{':
+		var document map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(trimmed), &document); err != nil {
+			return nil, fmt.Errorf("解析 sing-box JSON 对象失败: %w", err)
+		}
+		if rawOutbounds, exists := document["outbounds"]; exists {
+			var outbounds []json.RawMessage
+			if err := json.Unmarshal(rawOutbounds, &outbounds); err != nil {
+				return nil, fmt.Errorf("sing-box outbounds 必须为数组: %w", err)
+			}
+			return outbounds, nil
+		}
+		var header singboxOutboundHeader
+		if err := json.Unmarshal([]byte(trimmed), &header); err != nil || header.Type == "" {
+			return nil, fmt.Errorf("无法解析为有效的 sing-box 节点配置格式")
+		}
+		return []json.RawMessage{json.RawMessage(trimmed)}, nil
 	default:
-		return nil // 不支持的协议
+		return nil, fmt.Errorf("无法解析为有效的 sing-box 节点配置格式")
+	}
+}
+
+func canonicalSingboxOutboundType(outboundType string) string {
+	switch strings.ToLower(strings.TrimSpace(outboundType)) {
+	case "ss":
+		return "shadowsocks"
+	case "hy2":
+		return "hysteria2"
+	default:
+		return strings.ToLower(strings.TrimSpace(outboundType))
+	}
+}
+
+func newOfficialOptions(outboundType string) (any, bool) {
+	switch outboundType {
+	case "vmess":
+		return &option.VMessOutboundOptions{}, true
+	case "vless":
+		return &option.VLESSOutboundOptions{}, true
+	case "shadowsocks":
+		return &option.ShadowsocksOutboundOptions{}, true
+	case "trojan":
+		return &option.TrojanOutboundOptions{}, true
+	case "hysteria2":
+		return &option.Hysteria2OutboundOptions{}, true
+	case "anytls":
+		return &option.AnyTLSOutboundOptions{}, true
+	case "tuic":
+		return &option.TUICOutboundOptions{}, true
+	default:
+		return nil, false
+	}
+}
+
+func parseOfficialOutbound(ctx context.Context, raw json.RawMessage, header singboxOutboundHeader) (*model.OfficialSingboxOutbound, bool, error) {
+	options, supported := newOfficialOptions(header.Type)
+	if !supported {
+		return nil, false, fmt.Errorf("不支持的出站类型: %s", header.Type)
+	}
+	if err := singJSON.UnmarshalContext(ctx, raw, options); err == nil {
+		return model.NewOfficialSingboxOutbound(header.Type, header.Tag, options), false, nil
+	} else {
+		officialErr := err
+		normalized, compatible, normalizeErr := normalizeLegacyOutbound(raw)
+		if normalizeErr != nil {
+			return nil, false, fmt.Errorf("官方 %s 出站解析失败: %v；兼容转换失败: %w", header.Type, officialErr, normalizeErr)
+		}
+		if !compatible {
+			return nil, false, fmt.Errorf("官方 %s 出站解析失败: %w", header.Type, officialErr)
+		}
+
+		options, _ = newOfficialOptions(header.Type)
+		if retryErr := singJSON.UnmarshalContext(ctx, normalized, options); retryErr != nil {
+			return nil, false, fmt.Errorf("官方 %s 出站解析失败: %v；兼容规则 %s 转换后仍无效: %w", header.Type, officialErr, legacyEmptyTransportArrayRule, retryErr)
+		}
+		return model.NewOfficialSingboxOutbound(header.Type, header.Tag, options), true, nil
+	}
+}
+
+func fromOfficialSingboxOutbound(outbound *model.OfficialSingboxOutbound) *model.ProfileItem {
+	var profile *model.ProfileItem
+
+	switch options := outbound.Options().(type) {
+	case *option.VMessOutboundOptions:
+		profile = model.NewProfileItem(model.VMESS)
+		profile.Password = options.UUID
+		profile.Method = options.Security
+		if profile.Method == "" {
+			profile.Method = "auto"
+		}
+		profile.AlterId = options.AlterId
+		applyServerOptions(profile, options.ServerOptions)
+		applyV2RayTransport(profile, options.Transport)
+		applyOutboundTLS(profile, options.TLS)
+	case *option.VLESSOutboundOptions:
+		profile = model.NewProfileItem(model.VLESS)
+		profile.Password = options.UUID
+		profile.Flow = options.Flow
+		profile.Method = "none"
+		applyServerOptions(profile, options.ServerOptions)
+		applyV2RayTransport(profile, options.Transport)
+		applyOutboundTLS(profile, options.TLS)
+	case *option.ShadowsocksOutboundOptions:
+		profile = model.NewProfileItem(model.SHADOWSOCKS)
+		profile.Method = options.Method
+		profile.Password = options.Password
+		profile.Plugin = options.Plugin
+		profile.PluginOpts = options.PluginOptions
+		applyServerOptions(profile, options.ServerOptions)
+	case *option.TrojanOutboundOptions:
+		profile = model.NewProfileItem(model.TROJAN)
+		profile.Password = options.Password
+		applyServerOptions(profile, options.ServerOptions)
+		applyV2RayTransport(profile, options.Transport)
+		applyOutboundTLS(profile, options.TLS)
+	case *option.Hysteria2OutboundOptions:
+		profile = model.NewProfileItem(model.HYSTERIA2)
+		profile.Password = options.Password
+		applyServerOptions(profile, options.ServerOptions)
+		applyOutboundTLS(profile, options.TLS)
+		if options.UpMbps > 0 {
+			profile.BandwidthUp = strconv.Itoa(options.UpMbps) + " Mbps"
+		}
+		if options.DownMbps > 0 {
+			profile.BandwidthDown = strconv.Itoa(options.DownMbps) + " Mbps"
+		}
+		if options.Obfs != nil {
+			profile.ObfsPassword = options.Obfs.Password
+		}
+		if len(options.ServerPorts) > 0 {
+			profile.PortHopping = strings.Join([]string(options.ServerPorts), ",")
+		}
+		if interval := options.HopInterval.Build(); interval > 0 {
+			profile.PortHoppingInterval = strings.TrimSuffix(interval.String(), "s")
+		}
+	case *option.AnyTLSOutboundOptions:
+		profile = model.NewProfileItem(model.ANYTLS)
+		profile.Password = options.Password
+		applyServerOptions(profile, options.ServerOptions)
+		applyOutboundTLS(profile, options.TLS)
+	case *option.TUICOutboundOptions:
+		profile = model.NewProfileItem(model.TUIC)
+		profile.UUID = options.UUID
+		profile.Password = options.Password
+		profile.CongestionControl = options.CongestionControl
+		profile.UDPRelayMode = options.UDPRelayMode
+		profile.UDPOverStream = options.UDPOverStream
+		profile.ZeroRTTHandshake = options.ZeroRTTHandshake
+		if heartbeat := options.Heartbeat.Build(); heartbeat > 0 {
+			profile.Heartbeat = heartbeat.String()
+		}
+		applyServerOptions(profile, options.ServerOptions)
+		applyOutboundTLS(profile, options.TLS)
+		networks := options.Network.Build()
+		if len(networks) > 0 {
+			profile.Network = strings.Join(networks, ",")
+		}
+		profile.UDP = len(networks) == 0 || containsString(networks, "udp")
+	default:
+		return nil
 	}
 
-	p := model.NewProfileItem(configType)
-	p.Remarks = ob.Tag
-	p.Server = ob.Server
-	if ob.ServerPort > 0 {
-		p.ServerPort = strconv.Itoa(ob.ServerPort)
+	profile.Remarks = outbound.Tag()
+	profile.OfficialSingboxOutbound = outbound
+	if profile.Network == "" {
+		profile.Network = "tcp"
 	}
+	if (profile.ConfigType == model.TROJAN || profile.ConfigType == model.HYSTERIA2 || profile.ConfigType == model.ANYTLS || profile.ConfigType == model.TUIC) && profile.Security == "" {
+		profile.Security = "tls"
+	}
+	return profile
+}
 
-	// 协议特定字段
-	switch configType {
-	case model.VLESS:
-		p.Password = ob.UUID
-		p.Flow = ob.Flow
-		p.Method = "none"
-	case model.VMESS:
-		p.Password = ob.UUID
-		p.Method = ob.Security
-		if p.Method == "" || p.Method == "auto" {
-			p.Method = "auto"
-		}
-		p.AlterId = ob.AlterID
-	case model.SHADOWSOCKS:
-		p.Method = ob.Method
-		p.Password = ob.Password
-		p.Plugin = ob.Plugin
-		p.PluginOpts = ob.PluginOpts
-	case model.SOCKS:
-		p.Username = ob.Username
-		p.Password = ob.Password
-	case model.TROJAN:
-		p.Password = ob.Password
-	case model.HYSTERIA2:
-		p.Password = ob.Password
-		// 带宽
-		if ob.UpMbps > 0 {
-			p.BandwidthUp = strconv.Itoa(ob.UpMbps) + " Mbps"
-		}
-		if ob.DownMbps > 0 {
-			p.BandwidthDown = strconv.Itoa(ob.DownMbps) + " Mbps"
-		}
-		// 混淆
-		if ob.Obfs != nil && ob.Obfs.Password != "" {
-			p.ObfsPassword = ob.Obfs.Password
-		}
-		// 端口跳跃
-		if len(ob.ServerPorts) > 0 {
-			p.PortHopping = ob.ServerPorts[0]
-			if ob.HopInterval != "" {
-				p.PortHoppingInterval = strings.TrimSuffix(ob.HopInterval, "s")
-			}
-		}
-	case model.ANYTLS:
-		p.Password = ob.Password
-	case model.TUIC:
-		p.UUID = ob.UUID
-		p.Password = ob.Password
-		p.CongestionControl = ob.CongestionControl
-		p.UDPRelayMode = ob.UDPRelayMode
-		p.UDPOverStream = ob.UDPOverStream
-		p.ZeroRTTHandshake = ob.ZeroRTTHandshake
-		p.Heartbeat = ob.Heartbeat
+func applyServerOptions(profile *model.ProfileItem, server option.ServerOptions) {
+	profile.Server = server.Server
+	if server.ServerPort > 0 {
+		profile.ServerPort = strconv.Itoa(int(server.ServerPort))
 	}
+}
 
-	// 传输层
-	p.Network = "tcp"
-	if configType == model.SOCKS {
-		p.Network = ob.Network
-		p.UDP = ob.Network == "" || strings.Contains(ob.Network, "udp")
+func applyV2RayTransport(profile *model.ProfileItem, transport *option.V2RayTransportOptions) {
+	if transport == nil {
+		return
 	}
-	if configType == model.TUIC {
-		if ob.Network != "" {
-			p.Network = ob.Network
-		}
-		p.UDP = ob.Network == "" || strings.Contains(ob.Network, "udp")
-	}
-	if ob.Transport != nil {
-		p.Network = ob.Transport.Type
-		if ob.Transport.Path != "" && ob.Transport.Path != "/" {
-			p.Path = ob.Transport.Path
-		}
-
-		switch p.Network {
-		case "ws":
-			if ob.Transport.Headers != nil {
-				if host, ok := ob.Transport.Headers["Host"]; ok {
-					p.Host = host
-				} else if host, ok := ob.Transport.Headers["host"]; ok {
-					p.Host = host
-				}
-			}
-			if ob.Transport.MaxEarlyData > 0 {
-				p.MaxEarlyData = ob.Transport.MaxEarlyData
-				p.EarlyDataHeaderName = ob.Transport.EarlyDataHeaderName
-			}
-		case "httpupgrade":
-			if host, ok := ob.Transport.Host.(string); ok && host != "" {
-				p.Host = host
-			} else if ob.Transport.Headers != nil {
-				if host, ok := ob.Transport.Headers["Host"]; ok {
-					p.Host = host
-				} else if host, ok := ob.Transport.Headers["host"]; ok {
-					p.Host = host
-				}
-			}
-		case "grpc":
-			p.ServiceName = ob.Transport.ServiceName
-		case "h2", "http":
-			if hosts, ok := ob.Transport.Host.([]string); ok && len(hosts) > 0 {
-				p.Host = strings.Join(hosts, ",")
-			} else if host, ok := ob.Transport.Host.(string); ok && host != "" {
-				p.Host = host
-			}
+	profile.Network = transport.Type
+	switch transport.Type {
+	case "ws":
+		applyTransportPath(profile, transport.WebsocketOptions.Path)
+		profile.Host = strings.Join(transport.WebsocketOptions.Headers.Build().Values("Host"), ",")
+	case "http":
+		applyTransportPath(profile, transport.HTTPOptions.Path)
+		profile.Host = strings.Join([]string(transport.HTTPOptions.Host), ",")
+	case "grpc":
+		profile.ServiceName = transport.GRPCOptions.ServiceName
+	case "httpupgrade":
+		applyTransportPath(profile, transport.HTTPUpgradeOptions.Path)
+		profile.Host = transport.HTTPUpgradeOptions.Host
+		if profile.Host == "" {
+			profile.Host = strings.Join(transport.HTTPUpgradeOptions.Headers.Build().Values("Host"), ",")
 		}
 	}
+}
 
-	// TLS & Reality
-	if ob.TLS != nil && ob.TLS.Enabled {
-		if ob.TLS.Reality != nil && ob.TLS.Reality.Enabled {
-			p.Security = "reality"
-			p.PublicKey = ob.TLS.Reality.PublicKey
-			p.ShortID = ob.TLS.Reality.ShortID
-		} else {
-			p.Security = "tls"
+func applyTransportPath(profile *model.ProfileItem, path string) {
+	if path != "" && path != "/" {
+		profile.Path = path
+	}
+}
+
+func applyOutboundTLS(profile *model.ProfileItem, tls *option.OutboundTLSOptions) {
+	if tls == nil || !tls.Enabled {
+		return
+	}
+	profile.Security = "tls"
+	profile.SNI = tls.ServerName
+	profile.Insecure = tls.Insecure
+	profile.DisableSNI = tls.DisableSNI
+	if len(tls.ALPN) > 0 {
+		profile.ALPN = strings.Join([]string(tls.ALPN), ",")
+	}
+	if tls.UTLS != nil && tls.UTLS.Enabled {
+		profile.Fingerprint = tls.UTLS.Fingerprint
+	}
+	if tls.Reality != nil && tls.Reality.Enabled {
+		profile.Security = "reality"
+		profile.PublicKey = tls.Reality.PublicKey
+		profile.ShortID = tls.Reality.ShortID
+	}
+	if tls.ECH != nil && tls.ECH.Enabled {
+		if len(tls.ECH.Config) > 0 {
+			profile.EchConfigList = tls.ECH.Config[0]
 		}
+		profile.EchQueryServerName = tls.ECH.QueryServerName
+	}
+}
 
-		p.SNI = ob.TLS.ServerName
-		p.Insecure = ob.TLS.Insecure
-		p.DisableSNI = ob.TLS.DisableSNI
-
-		if len(ob.TLS.ALPN) > 0 {
-			p.ALPN = strings.Join(ob.TLS.ALPN, ",")
-		}
-
-		if ob.TLS.UTLS != nil && ob.TLS.UTLS.Enabled {
-			p.Fingerprint = ob.TLS.UTLS.Fingerprint
-		}
-
-		if ob.TLS.ECH != nil && ob.TLS.ECH.Enabled && len(ob.TLS.ECH.Config) > 0 {
-			p.EchConfigList = ob.TLS.ECH.Config[0]
-		}
-		if ob.TLS.ECH != nil && ob.TLS.ECH.Enabled {
-			p.EchQueryServerName = ob.TLS.ECH.QueryServerName
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
 		}
 	}
-
-	// Trojan 默认 TLS
-	if configType == model.TROJAN && p.Security == "" {
-		p.Security = "tls"
-	}
-
-	// Hysteria2 默认 TLS
-	if configType == model.HYSTERIA2 && p.Security == "" {
-		p.Security = "tls"
-	}
-
-	if (configType == model.ANYTLS || configType == model.TUIC) && p.Security == "" {
-		p.Security = "tls"
-	}
-
-	return p
+	return false
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"proxylink/pkg/encoder"
@@ -163,11 +164,19 @@ func handleParseSingbox(filename string) error {
 	if err != nil {
 		return err
 	}
-	profiles, err := parser.ParseSingboxConfig(content)
+	result, err := parser.ParseSingboxDetailed(content)
 	if err != nil {
 		return err
 	}
-	return outputProfiles(profiles)
+	fmt.Fprintf(os.Stderr, "sing-box 解析: 成功 %d, 失败 %d, 跳过 %d, 兼容转换 %d\n",
+		result.Stats.Success, result.Stats.Failed, result.Stats.Skipped, result.Stats.Compatible)
+	for _, event := range result.CompatibilityEvents {
+		fmt.Fprintln(os.Stderr, formatCompatibilityEvent(event))
+	}
+	for _, parseErr := range result.Errors {
+		fmt.Fprintf(os.Stderr, "警告: %v\n", parseErr)
+	}
+	return outputProfiles(result.Profiles)
 }
 
 func handleSubscription(url string) error {
@@ -189,8 +198,42 @@ func handleSubscription(url string) error {
 		return fmt.Errorf("订阅解析失败")
 	}
 
-	fmt.Fprintf(os.Stderr, "订阅解析: 成功 %d, 失败 %d\n", result.Success, result.Failed)
+	if result.SourceFormat != "" {
+		fmt.Fprintf(os.Stderr, "订阅识别: %s\n", result.SourceFormat)
+	}
+	fmt.Fprintln(os.Stderr, formatSubscriptionSummary(result))
+	for _, event := range result.CompatibilityEvents {
+		fmt.Fprintln(os.Stderr, formatCompatibilityEvent(event))
+	}
+	for _, parseErr := range result.Errors {
+		fmt.Fprintf(os.Stderr, "警告: %v\n", parseErr)
+	}
 	return outputProfiles(result.Profiles)
+}
+
+func formatCompatibilityEvent(event parser.SingboxCompatibilityEvent) string {
+	return fmt.Sprintf("兼容转换: outbounds[%d] tag=%q type=%q rule=%q",
+		event.Index, event.Tag, event.Type, event.Rule)
+}
+
+func formatSubscriptionSummary(result *subscription.ConvertResult) string {
+	lines := []string{fmt.Sprintf("订阅解析: 成功 %d, 失败 %d, 跳过 %d, 兼容转换 %d",
+		result.Success, result.Failed, result.Skipped, result.Compatible)}
+	if len(result.SkippedByType) == 0 {
+		return lines[0]
+	}
+
+	types := make([]string, 0, len(result.SkippedByType))
+	for outboundType := range result.SkippedByType {
+		types = append(types, outboundType)
+	}
+	sort.Strings(types)
+	parts := make([]string, 0, len(types))
+	for _, outboundType := range types {
+		parts = append(parts, fmt.Sprintf("%s=%d", outboundType, result.SkippedByType[outboundType]))
+	}
+	lines = append(lines, "跳过类型: "+strings.Join(parts, ", "))
+	return strings.Join(lines, "\n")
 }
 
 func handleBatch(content string) error {

@@ -1,0 +1,15 @@
+{
+  "outbounds": [
+    {"type":"selector","tag":"select","outbounds":["vmess"]},
+    {"type":"direct","tag":"direct"},
+    {"type":"block","tag":"block"},
+    {"type":"urltest","tag":"auto","outbounds":["vmess"]},
+    {"type":"vmess","tag":"vmess","server":"vmess.example.com","server_port":443,"uuid":"00000000-0000-0000-0000-000000000001","security":"auto","packet_encoding":"xudp","multiplex":{"enabled":true,"protocol":"h2mux"},"transport":{"type":"ws","headers":{"Host":["cdn-a.example.com","cdn-b.example.com"]},"max_early_data":2048,"early_data_header_name":"Sec-WebSocket-Protocol"}},
+    {"type":"vless","tag":"vless","server":"vless.example.com","server_port":443,"uuid":"00000000-0000-0000-0000-000000000002","packet_encoding":"xudp"},
+    {"type":"shadowsocks","tag":"ss","server":"ss.example.com","server_port":8388,"method":"aes-128-gcm","password":"test-password"},
+    {"type":"trojan","tag":"trojan","server":"trojan.example.com","server_port":443,"password":"test-password"},
+    {"type":"hysteria2","tag":"hy2","server":"hy2.example.com","server_port":443,"password":"test-password","up_mbps":20,"down_mbps":100},
+    {"type":"anytls","tag":"anytls","server":"anytls.example.com","server_port":443,"password":"test-password","idle_session_timeout":"30s"},
+    {"type":"tuic","tag":"tuic","server":"tuic.example.com","server_port":443,"uuid":"00000000-0000-0000-0000-000000000003","password":"test-password","congestion_control":"bbr"}
+  ]
+}

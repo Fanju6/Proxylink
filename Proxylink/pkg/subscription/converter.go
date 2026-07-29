@@ -18,11 +18,16 @@ var fallbackUserAgents = []string{
 
 // ConvertResult 转换结果
 type ConvertResult struct {
-	Profiles []*model.ProfileItem // 成功解析的配置
-	Errors   []error              // 解析错误
-	Total    int                  // 总行数
-	Success  int                  // 成功数
-	Failed   int                  // 失败数
+	Profiles            []*model.ProfileItem               // 成功解析的配置
+	Errors              []error                            // 解析错误
+	Total               int                                // 总条目数
+	Success             int                                // 成功数
+	Failed              int                                // 失败数
+	Skipped             int                                // 跳过数
+	Compatible          int                                // 旧格式兼容转换数
+	SkippedByType       map[string]int                     // 按协议统计跳过数
+	SourceFormat        string                             // 实际识别的订阅格式
+	CompatibilityEvents []parser.SingboxCompatibilityEvent // 兼容转换事件
 }
 
 // Converter 订阅转换器
@@ -105,6 +110,31 @@ func (c *Converter) Convert(url string) (*ConvertResult, error) {
 
 // ConvertContent 转换订阅内容
 func (c *Converter) ConvertContent(content string) (*ConvertResult, error) {
+	// sing-box 完整配置必须优先走官方类型与定向旧格式兼容通道。
+	if parser.IsSingboxSubscription([]byte(content)) {
+		parsed, err := parser.ParseSingboxDetailed([]byte(content))
+		if err != nil {
+			return nil, err
+		}
+		errors := make([]error, 0, len(parsed.Errors))
+		for _, parseErr := range parsed.Errors {
+			errors = append(errors, parseErr)
+		}
+		return &ConvertResult{
+			Profiles:            parsed.Profiles,
+			Errors:              errors,
+			Total:               parsed.Stats.Total,
+			Success:             parsed.Stats.Success,
+			Failed:              parsed.Stats.Failed,
+			Skipped:             parsed.Stats.Skipped,
+			Compatible:          parsed.Stats.Compatible,
+			SkippedByType:       parsed.Stats.SkippedByType,
+			SourceFormat:        "sing-box",
+			CompatibilityEvents: parsed.CompatibilityEvents,
+		}, nil
+	}
+
+	// 其他 provider-style 格式继续使用上游适配层。
 	if result, ok := convertContentWithSingboxProvider(content); ok {
 		return result, nil
 	}
@@ -114,9 +144,10 @@ func (c *Converter) ConvertContent(content string) (*ConvertResult, error) {
 		profiles, err := parser.ParseClashConfig([]byte(content))
 		if err == nil && len(profiles) > 0 {
 			return &ConvertResult{
-				Profiles: profiles,
-				Total:    len(profiles),
-				Success:  len(profiles),
+				Profiles:     profiles,
+				Total:        len(profiles),
+				Success:      len(profiles),
+				SourceFormat: "clash",
 			}, nil
 		}
 		// 解析失败则回退到链接解析
@@ -130,7 +161,8 @@ func (c *Converter) ConvertContent(content string) (*ConvertResult, error) {
 
 	// 解析
 	result := &ConvertResult{
-		Total: len(lines),
+		Total:        len(lines),
+		SourceFormat: "links",
 	}
 
 	for _, line := range lines {

@@ -5,14 +5,36 @@ on:
   push:
     paths:
       - 'Proxylink/**'
+      - '.github/workflows/Build.yml'
     tags:
       - 'v*'
   pull_request:
     paths:
       - 'Proxylink/**'
+      - '.github/workflows/Build.yml'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: Proxylink/go.mod
+          check-latest: true
+          cache: false
+
+      - name: Test and vet
+        working-directory: Proxylink
+        run: |
+          go test ./...
+          go vet ./...
+
   build:
+    needs: test
     permissions:
       contents: write
     strategy:
@@ -78,7 +100,7 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
       CGO_ENABLED: 0
-    
+
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v7

@@ -3,6 +3,7 @@ package generator
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,10 @@ import (
 
 type SingboxConfig struct {
 	Outbounds []*SingboxOutbound `json:"outbounds"`
+}
+
+type singboxRawConfig struct {
+	Outbounds []json.RawMessage `json:"outbounds"`
 }
 
 type SingboxOutbound struct {
@@ -100,32 +105,72 @@ type SingboxHy2Obfs struct {
 	Password string `json:"password,omitempty"`
 }
 
-// GenerateSingboxOutbound 从 ProfileItem 生成 sing-box 配置 JSON
+// GenerateSingboxOutbound 从 ProfileItem 生成 sing-box 配置 JSON。
+// 原生 sing-box 输入优先序列化官方类型，其他来源保留现有生成路径。
 func GenerateSingboxOutbound(p *model.ProfileItem) (string, error) {
-	ob := buildSingboxOutbound(p)
-	if ob == nil {
+	raw, err := marshalProfileSingboxOutbound(p, p.Remarks)
+	if err != nil {
+		return "", err
+	}
+	if raw == nil {
 		return "", nil
 	}
-
-	config := &SingboxConfig{Outbounds: []*SingboxOutbound{ob}}
-	return marshalSingboxJSON(config)
+	return marshalSingboxJSON(&singboxRawConfig{Outbounds: []json.RawMessage{raw}})
 }
 
-// GenerateSingboxOutbounds 从多个 ProfileItem 生成 sing-box 配置 JSON
+// GenerateSingboxOutbounds 从多个 ProfileItem 生成 sing-box 配置 JSON。
 func GenerateSingboxOutbounds(profiles []*model.ProfileItem) (string, error) {
-	var outbounds []*SingboxOutbound
+	outbounds := make([]json.RawMessage, 0, len(profiles))
 	usedTags := make(map[string]int)
 
-	for i, p := range profiles {
-		ob := buildSingboxOutbound(p)
-		if ob != nil {
-			ob.Tag = nextSingboxTag(p.Remarks, i, usedTags)
-			outbounds = append(outbounds, ob)
+	for i, profile := range profiles {
+		if !canGenerateSingboxOutbound(profile) {
+			continue
+		}
+		tag := nextSingboxTag(profile.Remarks, i, usedTags)
+		raw, err := marshalProfileSingboxOutbound(profile, tag)
+		if err != nil {
+			return "", err
+		}
+		if raw != nil {
+			outbounds = append(outbounds, raw)
 		}
 	}
 
-	config := &SingboxConfig{Outbounds: outbounds}
-	return marshalSingboxJSON(config)
+	return marshalSingboxJSON(&singboxRawConfig{Outbounds: outbounds})
+}
+
+func canGenerateSingboxOutbound(profile *model.ProfileItem) bool {
+	if profile.OfficialSingboxOutbound != nil {
+		return true
+	}
+	switch profile.ConfigType {
+	case model.VLESS, model.VMESS, model.SHADOWSOCKS, model.TROJAN, model.HYSTERIA2, model.ANYTLS, model.TUIC:
+		return true
+	default:
+		return false
+	}
+}
+
+func marshalProfileSingboxOutbound(profile *model.ProfileItem, tag string) (json.RawMessage, error) {
+	if profile.OfficialSingboxOutbound != nil {
+		raw, err := json.Marshal(profile.OfficialSingboxOutbound.WithTag(tag))
+		if err != nil {
+			return nil, fmt.Errorf("序列化官方 sing-box 出站失败: %w", err)
+		}
+		return raw, nil
+	}
+
+	outbound := buildSingboxOutbound(profile)
+	if outbound == nil {
+		return nil, nil
+	}
+	outbound.Tag = tag
+	raw, err := json.Marshal(outbound)
+	if err != nil {
+		return nil, fmt.Errorf("序列化 sing-box 出站失败: %w", err)
+	}
+	return raw, nil
 }
 
 func marshalSingboxJSON(v any) (string, error) {
