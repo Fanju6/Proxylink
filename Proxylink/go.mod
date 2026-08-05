@@ -3,7 +3,7 @@ module proxylink
 go 1.26.0
 
 require (
-	github.com/sagernet/sing v0.8.11
+	github.com/sagernet/sing v0.8.12
 	github.com/sagernet/sing-box v1.13.14
 	gopkg.in/yaml.v3 v3.0.1
 )
